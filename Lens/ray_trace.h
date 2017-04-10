@@ -166,7 +166,7 @@ Ray trace(
 	intersections.clear();
 	intersections.push_back(r.pos);
 
-	LEN = INTERFACE.size();
+	LEN = (int)INTERFACE.size();
 
 	int PHASE = 0;
 	int DELTA = 1;

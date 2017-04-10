@@ -1,17 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: lens.cpp
-//
-// This application displays a triangle using Direct3D 11
-//
-// http://msdn.microsoft.com/en-us/library/windows/apps/ff729719.aspx
-//
-// THIS CODE AND INFORMATION IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-// PARTICULAR PURPOSE.
-//
-// Copyright (c) Microsoft Corporation. All rights reserved.
 //--------------------------------------------------------------------------------------
+
 #include <windows.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
@@ -74,14 +64,14 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f },
 	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f },
 
-	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.0f },
-	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.0f },
+	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f },
+	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f },
 
 	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f },
 	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f },
 
-	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.0f },
-	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.0f },
+	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f },
+	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f },
 
 	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f },
 	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f },
@@ -97,17 +87,17 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f },
 
 	{   -62.929f,  1.450f, 1.51680f, false, 0.5f, 13.0f },
-	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.0f },
+	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f },
 
 	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f },
 
-	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.0f },
+	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f },
 	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f },
 
 	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f },
 
 	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f },
-	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.0f },
+	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f },
 
 	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f },
 	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f },
@@ -119,11 +109,11 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 };
 
 int num_of_rays = 251;
-int num_of_intersections = Nikon_28_75mm_lens_components.size() + 1;
+int num_of_intersections = (int)Nikon_28_75mm_lens_components.size() + 1;
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
-float backbuffer_width = 2000;
-float backbuffer_height = 1000;
+float backbuffer_width = 1800;
+float backbuffer_height = 900;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -133,6 +123,7 @@ float total_lens_distance = 0.f;
 XMFLOAT4 fill_color1        = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.35f };
 XMFLOAT4 fill_color2        = { 179.f / 255.f, 178.f / 255.f, 210.f / 255.f, 0.45f };
 XMFLOAT4 stroke_color       = {  64.f / 255.f,  64.f / 255.f,  64.f / 255.f, 1.00f };
+XMFLOAT4 flat_fill_color    = { 180.f / 255.f, 180.f / 255.f, 180.f / 255.f, 1.00f };
 XMFLOAT4 intersection_color = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.35f };
 
 XMFLOAT3 point_to_d3d(vec3& point) {
@@ -873,8 +864,6 @@ void DrawFlat(LensInterface& right) {
 	static UINT sampleMask = 0x0F;
 	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
-	static XMFLOAT4 flat_fill_color = { 0.6f, 0.6f, 0.6f, 1.f };
-
 	float mx = -(right.pos * global_scale - 1.f);
 	float mw = global_scale * 0.3f;
 	
@@ -926,7 +915,7 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		float mw = (min_radius - delta) * global_scale * right.w;
 		float mh = global_scale * right.h;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh * 1.001f };
-		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.999f };
+		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.997f };
 
 		float rx = -(_right.pos * global_scale - 1.f);
 		float rr = _right.radius * global_scale;
@@ -977,7 +966,7 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		float mw = -delta * global_scale * right.w - eps;
 		float mh = global_scale * right.h;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh };
-		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.999f };
+		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.997f };
 
 		float lx = -(left.pos * global_scale - 1.f);
 		float lr = left.radius * global_scale;
@@ -1026,7 +1015,7 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		float mw = global_scale * w;
 		float mh = global_scale * right.h;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh };
-		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.999f };
+		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.995f };
 
 		float lx = -(left.pos * global_scale - 1.f);
 		float lr = left.radius * global_scale;
@@ -1114,7 +1103,7 @@ void DrawIntersections(ID3D11DeviceContext* context, std::vector<vec3>& intersec
 
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 	context->IASetVertexBuffers(0, 1, &g_IntersectionPoints, &stride, &offset);
-	context->Draw(intersectios.size(), 0);
+	context->Draw((int)intersectios.size(), 0);
 
 }
 
