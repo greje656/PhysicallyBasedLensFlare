@@ -6,8 +6,47 @@
 #include "resource.h"
 #include "ray_trace.h"
 #include <vector>
+#include <string>
 
 using namespace DirectX;
+
+const std::string vertex_shader_source = R"(
+cbuffer Uniforms : register(b0)
+{
+	float4 color;
+	float4 placement;
+};
+
+//--------------------------------------------------------------------------------------
+// Vertex Shader
+//--------------------------------------------------------------------------------------
+float4 VS( float4 Pos : POSITION ) : SV_POSITION
+{
+	float4 p = Pos;
+	if (placement.y == 1.f) {
+		p.xy *= placement.zw;
+		p.x += placement.z;
+		p.x += placement.x;
+	}
+	return p;
+}
+)";
+
+const std::string pixel_shader_source = R"(
+cbuffer Uniforms : register(b0)
+{
+	float4 color;
+	float4 placement;
+};
+
+//--------------------------------------------------------------------------------------
+// Pixel Shader
+//--------------------------------------------------------------------------------------
+float4 PS( float4 Pos : SV_POSITION ) : SV_Target
+{
+    return color;
+}
+)";
 
 struct PatentFormat {
 	float r;
@@ -104,7 +143,7 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 17.f,  0.0f },
 };
 
-int num_of_rays = 251;
+int num_of_rays = 51;
 int num_of_intersections = (int)Nikon_28_75mm_lens_components.size() + 1;
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
@@ -260,13 +299,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow ) {
 	return S_OK;
 }
 
-
-//--------------------------------------------------------------------------------------
-// Helper for compiling shaders with D3DCompile
-//
-// With VS 11, we could load up prebuilt .cso files instead...
-//--------------------------------------------------------------------------------------
-HRESULT CompileShaderFromFile( WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut )
+HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
 {
 	HRESULT hr = S_OK;
 
@@ -283,16 +316,16 @@ HRESULT CompileShaderFromFile( WCHAR* szFileName, LPCSTR szEntryPoint, LPCSTR sz
 	#endif
 
 	ID3DBlob* pErrorBlob = nullptr;
-	hr = D3DCompileFromFile( szFileName, nullptr, nullptr, szEntryPoint, szShaderModel, 
-		dwShaderFlags, 0, ppBlobOut, &pErrorBlob );
-	if( FAILED(hr) ) {
-		if( pErrorBlob ) {
-			OutputDebugStringA( reinterpret_cast<const char*>( pErrorBlob->GetBufferPointer() ) );
+	hr = D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel,
+		dwShaderFlags, 0, ppBlobOut, &pErrorBlob);
+	if (FAILED(hr)) {
+		if (pErrorBlob) {
+			OutputDebugStringA(reinterpret_cast<const char*>(pErrorBlob->GetBufferPointer()));
 			pErrorBlob->Release();
 		}
 		return hr;
 	}
-	if( pErrorBlob ) pErrorBlob->Release();
+	if (pErrorBlob) pErrorBlob->Release();
 
 	return S_OK;
 }
@@ -590,10 +623,10 @@ HRESULT InitDevice()
 
 	// Compile the vertex shader
 	ID3DBlob* pVSBlob = nullptr;
-	hr = CompileShaderFromFile( L"lens.fx", "VS", "vs_4_0", &pVSBlob );
+	
+	hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_4_0", &pVSBlob);
 	if( FAILED( hr ) ) {
-		MessageBox( nullptr,
-					L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK );
+		MessageBox( nullptr, L"The source cannot be compiled.", L"Error", MB_OK );
 		return hr;
 	}
 
@@ -623,10 +656,9 @@ HRESULT InitDevice()
 
 	// Compile the pixel shader
 	ID3DBlob* pPSBlob = nullptr;
-	hr = CompileShaderFromFile( L"lens.fx", "PS", "ps_4_0", &pPSBlob );
+	hr = CompileShaderFromSource(pixel_shader_source, "PS", "ps_4_0", &pPSBlob);
 	if( FAILED( hr ) ) {
-		MessageBox( nullptr,
-					L"The FX file cannot be compiled.  Please run this executable from the directory that contains the FX file.", L"Error", MB_OK );
+		MessageBox(nullptr, L"The source cannot be compiled.", L"Error", MB_OK);
 		return hr;
 	}
 

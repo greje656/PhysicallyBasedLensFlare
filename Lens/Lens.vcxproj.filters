@@ -5,10 +5,6 @@
       <UniqueIdentifier>{8e114980-c1a3-4ada-ad7c-83caadf5daeb}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe</Extensions>
     </Filter>
-    <Filter Include="Shaders">
-      <UniqueIdentifier>{2c3d4c8c-5d1a-459a-a05a-a4e4b608a44e}</UniqueIdentifier>
-      <Extensions>fx;fxh;hlsl</Extensions>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CLInclude Include="resource.h">
@@ -18,17 +14,6 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
     <ClInclude Include="ray_trace.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="lens.fx">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="lens_PS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="lens_VS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lens.cpp" />
