@@ -893,7 +893,6 @@ void DrawFlat(LensInterface& right) {
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
 	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement3, true);
 	DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement3, false);
-
 }
 
 void DrawLens(LensInterface& left, LensInterface& right) {
