@@ -11,8 +11,7 @@
 using namespace DirectX;
 
 const std::string vertex_shader_source = R"(
-cbuffer Uniforms : register(b0)
-{
+cbuffer Uniforms : register(b0) {
 	float4 color;
 	float4 placement;
 };
@@ -20,8 +19,7 @@ cbuffer Uniforms : register(b0)
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-float4 VS( float4 Pos : POSITION ) : SV_POSITION
-{
+float4 VS( float4 Pos : POSITION ) : SV_POSITION {
 	float4 p = Pos;
 	if (placement.y == 1.f) {
 		p.xy *= placement.zw;
@@ -33,8 +31,7 @@ float4 VS( float4 Pos : POSITION ) : SV_POSITION
 )";
 
 const std::string pixel_shader_source = R"(
-cbuffer Uniforms : register(b0)
-{
+cbuffer Uniforms : register(b0) {
 	float4 color;
 	float4 placement;
 };
@@ -42,8 +39,7 @@ cbuffer Uniforms : register(b0)
 //--------------------------------------------------------------------------------------
 // Pixel Shader
 //--------------------------------------------------------------------------------------
-float4 PS( float4 Pos : SV_POSITION ) : SV_Target
-{
+float4 PS( float4 Pos : SV_POSITION ) : SV_Target {
     return color;
 }
 )";
@@ -67,11 +63,6 @@ struct Uniforms {
 };
 
 namespace LensShapes {
-	struct Line {
-		float x;
-		ID3D11Buffer* vertices;
-	};
-
 	struct Rectangle {
 		ID3D11Buffer* vertices;
 		ID3D11Buffer* lines;
@@ -143,7 +134,7 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 17.f,  0.0f },
 };
 
-int num_of_rays = 51;
+int num_of_rays = 251;
 int num_of_intersections = (int)Nikon_28_75mm_lens_components.size() + 1;
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
