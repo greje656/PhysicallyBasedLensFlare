@@ -873,8 +873,7 @@ void DrawFlat(LensInterface& right) {
 	static UINT sampleMask = 0x0F;
 	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
-	static XMFLOAT4 stroke_color = { 0.2f, 0.2f, 0.2f, 1.f };
-	static XMFLOAT4 fill_color = { 0.6f, 0.6f, 0.6f, 1.f };
+	static XMFLOAT4 flat_fill_color = { 0.6f, 0.6f, 0.6f, 1.f };
 
 	float mx = -(right.pos * global_scale - 1.f);
 	float mw = global_scale * 0.3f;
@@ -885,14 +884,14 @@ void DrawFlat(LensInterface& right) {
 
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateMask, blendFactor, sampleMask);
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilStateFill, 1);
-	DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement1, true);
+	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement1, true);
 
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilStateFill, 0);
-	DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement2, true);
+	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement2, true);
 
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilStateGreaterOrEqualRead, 1);
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
-	DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement3, true);
+	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement3, true);
 	DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement3, false);
 
 }
