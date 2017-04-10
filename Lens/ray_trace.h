@@ -1,5 +1,11 @@
 ﻿#pragma once
 
+//--------------------------------------------------------------------------------------
+// This is a port of:
+// http://resources.mpi-inf.mpg.de/lensflareRendering/pdf/flare-supplement.pdf
+//--------------------------------------------------------------------------------------
+
+
 #include <math.h>
 #include <vector>
 #include <algorithm>
@@ -86,7 +92,6 @@ float length_xy(vec3& v) {
 	return sqrt(v.z * v.z + v.y * v.y);
 }
 
-//LensInterface INTERFACE[NUM_INTERFACE];
 int2 BOUNCE[NUM_BOUNCE];
 int LENGTH[NUM_BOUNCE];
 
@@ -182,8 +187,8 @@ Ray trace(
 		
 		if (!i.hit) break;
 
-intersections.push_back(i.pos);
-if (abs(i.pos.y) > F.h) break;
+		intersections.push_back(i.pos);
+		if (abs(i.pos.y) > F.h) break;
 
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);
@@ -203,18 +208,18 @@ if (abs(i.pos.y) > F.h) break;
 		float n1 = F.n.y;
 		float n2 = r.dir.z < 0 ? F.n.z : F.n.x;
 		
-		if (!bReflect)
-		{
+		if (!bReflect) {
 			r.dir = refract(r.dir , i.norm , n0 / n2);
 			if (r.dir == 0) break;
 		}
-		else
-		{
+		else {
 			r.dir = reflect(r.dir , i.norm);
 			float R = FresnelAR(i.theta , lambda , F.d1 , n0 , n1 , n2);
 			r.tex.a *= R; 
 		}
 	}
+
 	if (k<LEN) r.tex.a = 0;
+
 	return r;
 }

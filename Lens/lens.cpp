@@ -1,7 +1,3 @@
-//--------------------------------------------------------------------------------------
-// File: lens.cpp
-//--------------------------------------------------------------------------------------
-
 #include <windows.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>
@@ -119,6 +115,11 @@ float min_ior = 1000.f;
 float max_ior = -1000.f;
 float global_scale = 0.009;
 float total_lens_distance = 0.f;
+
+INT sampleMask = 0x0F;
+UINT offset = 0;
+UINT stride = sizeof(SimpleVertex);
+float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
 XMFLOAT4 fill_color1        = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.35f };
 XMFLOAT4 fill_color2        = { 179.f / 255.f, 178.f / 255.f, 210.f / 255.f, 0.45f };
@@ -382,7 +383,6 @@ LensShapes::Circle CreateUnitCircle() {
 	to_add.Pos = XMFLOAT3(0.f, 1.f / ratio, 0.f);
 	line_vertices.push_back(to_add);
 
-	float* data1 = (float*)&triangle_vertices[0];
 	D3D11_BUFFER_DESC bd1;
 	ZeroMemory(&bd1, sizeof(bd1));
 	bd1.Usage = D3D11_USAGE_DEFAULT;
@@ -391,9 +391,8 @@ LensShapes::Circle CreateUnitCircle() {
 	bd1.CPUAccessFlags = 0;
 	D3D11_SUBRESOURCE_DATA InitData1;
 	ZeroMemory(&InitData1, sizeof(InitData1));
-	InitData1.pSysMem = data1;
+	InitData1.pSysMem = (float*)&triangle_vertices[0];
 
-	float* data2 = (float*)&line_vertices[0];
 	D3D11_BUFFER_DESC bd2;
 	ZeroMemory(&bd2, sizeof(bd2));
 	bd2.Usage = D3D11_USAGE_DEFAULT;
@@ -402,7 +401,7 @@ LensShapes::Circle CreateUnitCircle() {
 	bd2.CPUAccessFlags = 0;
 	D3D11_SUBRESOURCE_DATA InitData2;
 	ZeroMemory(&InitData2, sizeof(InitData2));
-	InitData2.pSysMem = data2;
+	InitData2.pSysMem = (float*)&line_vertices[0];
 
 	LensShapes::Circle circle;
 	circle.x = 0;
@@ -413,54 +412,6 @@ LensShapes::Circle CreateUnitCircle() {
 	g_pd3dDevice->CreateBuffer(&bd2, &InitData2, &circle.lines);
 
 	return circle;
-}
-
-void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
-	static UINT stride = sizeof(SimpleVertex);
-	static UINT offset = 0;
-
-	Uniforms cb = { color, placement };
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
-	if (filled) {
-		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
-		context->Draw(6, 0);
-	}
-	else {
-		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-		context->IASetVertexBuffers(0, 1, &rectangle.lines, &stride, &offset);
-		context->Draw(5, 0);
-	}
-}
-
-void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
-	static UINT stride = sizeof(SimpleVertex);
-	static UINT offset = 0;
-
-	Uniforms cb = {color, placement};
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
-	if (filled) {
-		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		context->IASetVertexBuffers(0, 1, &circle.triangles, &stride, &offset);
-		context->Draw(num_vertices_per_cirlces, 0);
-	}
-	else {
-		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-		context->IASetVertexBuffers(0, 1, &circle.lines, &stride, &offset);
-		context->Draw(num_points_per_cirlces, 0);
-	}
-}
-
-void DrawLine(ID3D11DeviceContext* context, LensShapes::Line& line, float r, float g, float b, float a) {
-	static UINT stride = sizeof(SimpleVertex);
-	static UINT offset = 0;
-
-	Uniforms cb;
-	cb.color = XMFLOAT4(r, g, b, a);
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
-	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-	context->IASetVertexBuffers(0, 1, &line.vertices, &stride, &offset);
-	context->Draw(2, 0);
 }
 
 //--------------------------------------------------------------------------------------
@@ -860,10 +811,37 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 	return 0;
 }
 
-void DrawFlat(LensInterface& right) {
-	static UINT sampleMask = 0x0F;
-	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
+void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
+	Uniforms cb = { color, placement };
+	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	if (filled) {
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
+		context->Draw(6, 0);
+	}
+	else {
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+		context->IASetVertexBuffers(0, 1, &rectangle.lines, &stride, &offset);
+		context->Draw(5, 0);
+	}
+}
 
+void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
+	Uniforms cb = { color, placement };
+	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	if (filled) {
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		context->IASetVertexBuffers(0, 1, &circle.triangles, &stride, &offset);
+		context->Draw(num_vertices_per_cirlces, 0);
+	}
+	else {
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+		context->IASetVertexBuffers(0, 1, &circle.lines, &stride, &offset);
+		context->Draw(num_points_per_cirlces, 0);
+	}
+}
+
+void DrawFlat(LensInterface& right) {
 	float mx = -(right.pos * global_scale - 1.f);
 	float mw = global_scale * 0.3f;
 	
@@ -885,8 +863,6 @@ void DrawFlat(LensInterface& right) {
 }
 
 void DrawLens(LensInterface& left, LensInterface& right) {
-	static UINT sampleMask = 0x0F;
-	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 	
 	float normalized_ior = (right.n.x - min_ior) / (max_ior - min_ior);
 	XMFLOAT4 fill_color = normalized_ior < 0.5f ? fill_color1 : fill_color2;
@@ -949,9 +925,6 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
-
-		//g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
-		//DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, false);
 	}
 	//     / \
 	//    |   |
@@ -999,9 +972,6 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
-
-		//g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
-		//DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, false);
 	}
 	//   \    /
 	//    |  |
@@ -1047,18 +1017,10 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 		g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilStateGreaterOrEqualRead, 1);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
-
-		//g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
-		//DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, false);
 	}
 }
 
 void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
-
-	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
-	static UINT sampleMask = 0x0F;
-	static UINT stride = sizeof(SimpleVertex);
-	static UINT offset = 0;
 
 	g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
@@ -1080,11 +1042,6 @@ void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
 }
 
 void DrawIntersections(ID3D11DeviceContext* context, std::vector<vec3>& intersectios, XMFLOAT4& color) {
-	static UINT stride = sizeof(SimpleVertex);
-	static UINT offset = 0;
-	static float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
-	static UINT sampleMask = 0x0F;
-
 	Uniforms cb;
 	cb.color = color;
 	cb.placement = XMFLOAT4(0.f, 0.f, 0.f, 0.f);
