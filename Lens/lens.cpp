@@ -3,10 +3,12 @@
 #include <d3dcompiler.h>
 #include <directxmath.h>
 #include <directxcolors.h>
-#include "resource.h"
-#include "ray_trace.h"
+
 #include <vector>
 #include <string>
+
+#include "resource.h"
+#include "ray_trace.h"
 
 using namespace DirectX;
 
