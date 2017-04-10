@@ -486,22 +486,22 @@ HRESULT InitDevice()
 		if( SUCCEEDED( hr ) )
 			break;
 	}
+
 	if( FAILED( hr ) )
 		return hr;
 
 	// Obtain DXGI factory from device (since we used nullptr for pAdapter above)
-	IDXGIFactory1* dxgiFactory = nullptr;{
-		IDXGIDevice* dxgiDevice = nullptr;
-		hr = g_pd3dDevice->QueryInterface( __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice) );
+	IDXGIFactory1* dxgiFactory = nullptr;
+	IDXGIDevice* dxgiDevice = nullptr;
+	hr = g_pd3dDevice->QueryInterface( __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice) );
+	if (SUCCEEDED(hr)) {
+		IDXGIAdapter* adapter = nullptr;
+		hr = dxgiDevice->GetAdapter(&adapter);
 		if (SUCCEEDED(hr)) {
-			IDXGIAdapter* adapter = nullptr;
-			hr = dxgiDevice->GetAdapter(&adapter);
-			if (SUCCEEDED(hr)) {
-				hr = adapter->GetParent( __uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory) );
-				adapter->Release();
-			}
-			dxgiDevice->Release();
+			hr = adapter->GetParent( __uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory) );
+			adapter->Release();
 		}
+		dxgiDevice->Release();
 	}
 
 	if (FAILED(hr))
@@ -622,7 +622,7 @@ HRESULT InitDevice()
 	}
 
 	// Create the vertex shader
-	hr = g_pd3dDevice->CreateVertexShader( pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &g_pVertexShader );
+	hr = g_pd3dDevice->CreateVertexShader(pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), nullptr, &g_pVertexShader);
 	if( FAILED( hr ) ) {
 		pVSBlob->Release();
 		return hr;
@@ -633,11 +633,10 @@ HRESULT InitDevice()
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
 
-	UINT numElements = ARRAYSIZE( layout );
+	UINT numElements = ARRAYSIZE(layout);
 
 	// Create the input layout
-	hr = g_pd3dDevice->CreateInputLayout( layout, numElements, pVSBlob->GetBufferPointer(),
-											pVSBlob->GetBufferSize(), &g_pVertexLayout );
+	hr = g_pd3dDevice->CreateInputLayout(layout, numElements, pVSBlob->GetBufferPointer(), pVSBlob->GetBufferSize(), &g_pVertexLayout);
 	pVSBlob->Release();
 	if( FAILED( hr ) )
 		return hr;
@@ -654,7 +653,7 @@ HRESULT InitDevice()
 	}
 
 	// Create the pixel shader
-	hr = g_pd3dDevice->CreatePixelShader( pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pPixelShader );
+	hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pPixelShader);
 	pPSBlob->Release();
 	if( FAILED( hr ) )
 		return hr;
@@ -780,8 +779,7 @@ HRESULT InitDevice()
 //--------------------------------------------------------------------------------------
 // Clean up the objects we've created
 //--------------------------------------------------------------------------------------
-void CleanupDevice()
-{
+void CleanupDevice() {
 	if( g_pImmediateContext ) g_pImmediateContext->ClearState();
 
 	if( g_pVertexBuffer ) g_pVertexBuffer->Release();
@@ -816,19 +814,18 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 	PAINTSTRUCT ps;
 	HDC hdc;
 
-	switch( message )
-	{
-	case WM_PAINT:
-		hdc = BeginPaint( hWnd, &ps );
-		EndPaint( hWnd, &ps );
-		break;
+	switch( message ) {
+		case WM_PAINT:
+			hdc = BeginPaint( hWnd, &ps );
+			EndPaint( hWnd, &ps );
+			break;
 
-	case WM_DESTROY:
-		PostQuitMessage( 0 );
-		break;
+		case WM_DESTROY:
+			PostQuitMessage( 0 );
+			break;
 
-	default:
-		return DefWindowProc( hWnd, message, wParam, lParam );
+		default:
+			return DefWindowProc( hWnd, message, wParam, lParam );
 	}
 
 	return 0;
@@ -954,8 +951,7 @@ void DrawLens(LensInterface& left, LensInterface& right) {
 	//    |   |
 	//    |   |
 	//     \ /
-	else if (left.radius > 0.f && right.radius < 0.f)
-	{
+	else if (left.radius > 0.f && right.radius < 0.f) {
 		float eps = 0.001f;
 		float delta = abs(right.pos - left.pos);
 		float mx = -(right.pos * global_scale - 1.f) + eps;
@@ -1084,16 +1080,12 @@ void DrawIntersections(ID3D11DeviceContext* context, std::vector<vec3>& intersec
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 	context->IASetVertexBuffers(0, 1, &g_IntersectionPoints, &stride, &offset);
 	context->Draw((int)intersectios.size(), 0);
-
 }
 
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
-void Render()
-{
-	Uniforms cb;
-
+void Render() {
 	// Clear the back buffer 
 	g_pImmediateContext->ClearRenderTargetView( g_pRenderTargetView, Colors::WhiteSmoke);
 	g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
@@ -1103,9 +1095,7 @@ void Render()
 	g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_Uniforms);
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_Uniforms);
 
-	static float time = 0.f;
-	time += 0.01;
-	
+	static float time = 0.f; time += 0.01f;
 	float anim_ray_direction = sin(time) * 5.f;
 	float anim_g4_lens = sin(time * 0.5f) * 0.01f;
 	float rays_spread = 20.f;
@@ -1131,5 +1121,5 @@ void Render()
 
 	DrawLensInterface(Nikon_28_75mm_lens_interface);
 
-	g_pSwapChain->Present( 0, 0 );	
+	g_pSwapChain->Present(0, 0);	
 }
