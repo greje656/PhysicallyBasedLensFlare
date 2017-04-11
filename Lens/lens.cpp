@@ -292,34 +292,8 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow ) {
 	return S_OK;
 }
 
-HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
-{
-	HRESULT hr = S_OK;
-
-	DWORD dwShaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
-	#ifdef _DEBUG
-		// Set the D3DCOMPILE_DEBUG flag to embed debug information in the shaders.
-		// Setting this flag improves the shader debugging experience, but still allows 
-		// the shaders to be optimized and to run exactly the way they will run in 
-		// the release configuration of this program.
-		dwShaderFlags |= D3DCOMPILE_DEBUG;
-
-		// Disable optimizations to further improve shader debugging
-		dwShaderFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
-	#endif
-
-	ID3DBlob* pErrorBlob = nullptr;
-	hr = D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel,
-		dwShaderFlags, 0, ppBlobOut, &pErrorBlob);
-	if (FAILED(hr)) {
-		if (pErrorBlob) {
-			OutputDebugStringA(reinterpret_cast<const char*>(pErrorBlob->GetBufferPointer()));
-			pErrorBlob->Release();
-		}
-		return hr;
-	}
-	if (pErrorBlob) pErrorBlob->Release();
-
+HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
+	D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, nullptr);
 	return S_OK;
 }
 
@@ -1088,7 +1062,6 @@ void DrawIntersections(ID3D11DeviceContext* context, std::vector<vec3>& intersec
 // Render a frame
 //--------------------------------------------------------------------------------------
 void Render() {
-	// Clear the back buffer 
 	g_pImmediateContext->ClearRenderTargetView( g_pRenderTargetView, Colors::WhiteSmoke);
 	g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
 
