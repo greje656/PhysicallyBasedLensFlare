@@ -136,10 +136,10 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 17.f,  0.0f },
 };
 
-int num_of_rays = 251;
+int num_of_rays = 151;
 int num_of_lens_components = (int)Nikon_28_75mm_lens_components.size();
 
-int ghost_bounce_1 = 16;
+int ghost_bounce_1 = 25;
 int ghost_bounce_2 = 6;
 
 int num_of_intersections_1 = num_of_lens_components;
@@ -161,14 +161,23 @@ UINT offset = 0;
 UINT stride = sizeof(SimpleVertex);
 float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
-XMFLOAT4 fill_color1         = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.35f };
-XMFLOAT4 fill_color2         = { 179.f / 255.f, 178.f / 255.f, 210.f / 255.f, 0.35f };
-XMFLOAT4 stroke_color        = {  64.f / 255.f,  64.f / 255.f,  64.f / 255.f, 1.00f };
+XMFLOAT4 fill_color1         = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.65f };
+XMFLOAT4 fill_color2         = { 179.f / 255.f, 178.f / 255.f, 210.f / 255.f, 0.65f };
 XMFLOAT4 flat_fill_color     = { 180.f / 255.f, 180.f / 255.f, 180.f / 255.f, 1.00f };
-XMFLOAT4 background_color    = { 220.f / 255.f, 220.f / 255.f, 220.f / 255.f, 1.00f };
-XMFLOAT4 intersection_color1 = { 0,0,1, 0.1f };
-XMFLOAT4 intersection_color2 = { 1,0,0, 0.1f };
-XMFLOAT4 intersection_color3 = { 1,0,1, 0.1f };
+XMFLOAT4 stroke_color        = { 0.45, 0.45, 0.45, 1.0f };
+XMFLOAT4 background_color    = { 0.95, 0.95, 0.95, 1.0f };
+
+//XMFLOAT4 intersection_color1 = { 0.8,0.8,1, 0.4f };
+//XMFLOAT4 intersection_color2 = { 1,0.8,0.8, 0.4f };
+//XMFLOAT4 intersection_color3 = { 0.8,1,0.8, 0.4f };
+
+//XMFLOAT4 intersection_color1 = { 0,0,1, 0.1f };
+//XMFLOAT4 intersection_color2 = { 1,0,0, 0.1f };
+//XMFLOAT4 intersection_color3 = { 1,0,1, 0.1f };
+
+XMFLOAT4 intersection_color1 = { 0,0,0, 0.15f };
+XMFLOAT4 intersection_color2 = { 0,0,0, 0.10f };
+XMFLOAT4 intersection_color3 = { 0,0,0, 0.05f };
 
 XMFLOAT3 point_to_d3d(vec3& point) {
 	float x = point.x;
@@ -857,7 +866,7 @@ void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOA
 
 void DrawFlat(LensInterface& right) {
 	float mx = -(right.pos * global_scale - 1.f);
-	float mw = global_scale * 0.3f;
+	float mw = global_scale * 0.4f;
 	
 	XMFLOAT4 mask_placement1 = { mx, 1.f, mw * 1.00f, global_scale * right.w };
 	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.h };
@@ -879,8 +888,8 @@ void DrawFlat(LensInterface& right) {
 void DrawLens(LensInterface& left, LensInterface& right, XMFLOAT4& color) {
 	
 	float normalized_ior = (right.n.x - min_ior) / (max_ior - min_ior);
-	//XMFLOAT4 fill_color = normalized_ior < 0.5f ? fill_color1 : fill_color2;
-	XMFLOAT4 fill_color = lerp(fill_color1, fill_color2, normalized_ior);
+	XMFLOAT4 fill_color = normalized_ior < 0.5f ? fill_color1 : fill_color2;
+	//XMFLOAT4 fill_color = lerp(fill_color1, fill_color2, normalized_ior);
 
 	//  |\      /|
 	//  | |    | |
@@ -1102,10 +1111,10 @@ void Render() {
 	float rays_spread = 3.f;
 
 	// Small animation hack
-	for (int i = 6; i < 14; ++i) {
-		Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
-		Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
-	}
+	// for (int i = 6; i < 14; ++i) {
+	// 	Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
+	// 	Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
+	// }
 
 	// Trace all rays
 	std::vector<std::vector<vec3>> intersections1(num_of_rays);
