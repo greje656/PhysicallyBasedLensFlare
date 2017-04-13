@@ -161,7 +161,7 @@ UINT offset = 0;
 UINT stride = sizeof(SimpleVertex);
 float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
-float time         = ghost_bounce_1;
+float time         = (float)ghost_bounce_1;
 float speed        = 0.001f;
 float swing_angle  = 1.0f;
 float swing_speed  = 4.0f;
@@ -1150,8 +1150,8 @@ float AnimateRayDirection() {
 float AnimateSpread() {
 	float anim_rays_spread = (cos(time * spread_speed * PI) + 1.f) * 0.5f;
 	intersection_color1.w = lerp(0.05f, 0.01f, anim_rays_spread);
-	intersection_color2.w = lerp(0.70f, 0.01f, anim_rays_spread);
-	intersection_color3.w = lerp(0.70f, 0.01f, anim_rays_spread);
+	intersection_color2.w = lerp(0.50f, 0.01f, anim_rays_spread);
+	intersection_color3.w = lerp(0.50f, 0.01f, anim_rays_spread);
 	return lerp(rays_spread2, rays_spread1, anim_rays_spread);
 }
 
