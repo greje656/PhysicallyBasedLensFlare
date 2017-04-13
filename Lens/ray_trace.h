@@ -159,19 +159,22 @@ float FresnelAR(
 }
 
 Ray trace(
-	int bid,
 	Ray r,
 	float lambda,
 	std::vector<LensInterface>& INTERFACE,
-	std::vector<vec3>& intersections 
+	std::vector<vec3>& intersections1,
+	std::vector<vec3>& intersections2,
+	std::vector<vec3>& intersections3,
+	int2 STR
 ) {
-	int2 STR = BOUNCE[bid];
-	int LEN = LENGTH[bid];
 
-	intersections.clear();
-	intersections.push_back(r.pos);
+	intersections1.clear();
+	intersections2.clear();
+	intersections3.clear();
 
-	LEN = (int)INTERFACE.size();
+	intersections1.push_back(r.pos);
+
+	int LEN = STR.x + (STR.x - STR.y) + ((int)INTERFACE.size() - STR.y);
 
 	int PHASE = 0;
 	int DELTA = 1;
@@ -187,7 +190,17 @@ Ray trace(
 		
 		if (!i.hit) break;
 
-		intersections.push_back(i.pos);
+		if (PHASE == 0) {
+			intersections1.push_back(i.pos);
+		} else if (PHASE == 1) {
+			if(bReflect) intersections1.push_back(i.pos);
+			intersections2.push_back(i.pos);
+		}
+		else {
+			if (bReflect) intersections2.push_back(i.pos);
+			intersections3.push_back(i.pos);
+		}
+
 		if (abs(i.pos.y) > F.h) break;
 
 		if (!F.flat)
