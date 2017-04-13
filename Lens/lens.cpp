@@ -139,8 +139,8 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 int num_of_rays = 151;
 int num_of_lens_components = (int)Nikon_28_75mm_lens_components.size();
 
-int ghost_bounce_1 = 25;
-int ghost_bounce_2 = 6;
+int ghost_bounce_1 = 2;
+int ghost_bounce_2 = 1;
 
 int num_of_intersections_1 = num_of_lens_components;
 int num_of_intersections_2 = num_of_lens_components;
@@ -161,23 +161,37 @@ UINT offset = 0;
 UINT stride = sizeof(SimpleVertex);
 float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
-XMFLOAT4 fill_color1         = {  64.f / 255.f, 215.f / 255.f, 242.f / 255.f, 0.65f };
-XMFLOAT4 fill_color2         = { 179.f / 255.f, 178.f / 255.f, 210.f / 255.f, 0.65f };
-XMFLOAT4 flat_fill_color     = { 180.f / 255.f, 180.f / 255.f, 180.f / 255.f, 1.00f };
-XMFLOAT4 stroke_color        = { 0.45, 0.45, 0.45, 1.0f };
-XMFLOAT4 background_color    = { 0.95, 0.95, 0.95, 1.0f };
+float time         = ghost_bounce_1;
+float speed        = 0.001f;
+float swing_angle  = 1.0f;
+float swing_speed  = 4.0f;
+float spread_speed = 2.0f;
+float rays_spread1 = 0.0f;
+float rays_spread2 = 5.0f;
 
-//XMFLOAT4 intersection_color1 = { 0.8,0.8,1, 0.4f };
-//XMFLOAT4 intersection_color2 = { 1,0.8,0.8, 0.4f };
-//XMFLOAT4 intersection_color3 = { 0.8,1,0.8, 0.4f };
+XMFLOAT4 sRGB(XMFLOAT4 c) {
+	XMFLOAT4 rgb = c;
+	rgb.x /= 255.f;
+	rgb.y /= 255.f;
+	rgb.z /= 255.f;
+	return rgb;
+};
 
-//XMFLOAT4 intersection_color1 = { 0,0,1, 0.1f };
-//XMFLOAT4 intersection_color2 = { 1,0,0, 0.1f };
-//XMFLOAT4 intersection_color3 = { 1,0,1, 0.1f };
+#define COLOR_THEME1
+#ifdef COLOR_THEME1
+	float opaque_alpha           = 0.65;
+	XMFLOAT4 fill_color1         = sRGB({  64.f, 215.f, 242.f, 0.2f });
+	XMFLOAT4 fill_color2         = sRGB({ 179.f, 178.f, 210.f, 0.2f });
+	XMFLOAT4 flat_fill_color     = sRGB({ 190.f, 190.f, 190.f, 1.0f });
+	XMFLOAT4 stroke_color        = sRGB({ 115.f, 115.f, 115.f, 1.0f });
+	XMFLOAT4 stroke_color1       = sRGB({ 115.f, 115.f, 115.f, 1.0f });
+	XMFLOAT4 stroke_color2       = sRGB({ 165.f, 165.f, 165.f, 1.0f });
+	XMFLOAT4 background_color    = sRGB({ 240.f, 240.f, 240.f, 1.0f });
 
-XMFLOAT4 intersection_color1 = { 0,0,0, 0.15f };
-XMFLOAT4 intersection_color2 = { 0,0,0, 0.10f };
-XMFLOAT4 intersection_color3 = { 0,0,0, 0.05f };
+	XMFLOAT4 intersection_color1 = sRGB({   0.f,   0.f,   0.f, 0.1f });
+	XMFLOAT4 intersection_color2 = sRGB({  64.f, 215.f, 242.f, 0.5f });
+	XMFLOAT4 intersection_color3 = sRGB({ 179.f, 178.f, 210.f, 0.5f });
+#endif
 
 XMFLOAT3 point_to_d3d(vec3& point) {
 	float x = point.x;
@@ -885,11 +899,26 @@ void DrawFlat(LensInterface& right) {
 	DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement3, false);
 }
 
-void DrawLens(LensInterface& left, LensInterface& right, XMFLOAT4& color) {
+XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
+	float normalized_ior = (ior - min_ior) / (max_ior - min_ior);
+	return lerp(c1, c2, normalized_ior);
+	//return normalized_ior < 0.5f ? c1 : c2;
+}
+
+XMFLOAT4 IntersectionColor(int i) {
+	float ior1 = Nikon_28_75mm_lens_interface[i].n.x == 1.f ? Nikon_28_75mm_lens_interface[i].n.z : Nikon_28_75mm_lens_interface[i].n.x;
+	return LensColor(ior1, intersection_color2, intersection_color3);
+}
+
+void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 	
-	float normalized_ior = (right.n.x - min_ior) / (max_ior - min_ior);
-	XMFLOAT4 fill_color = normalized_ior < 0.5f ? fill_color1 : fill_color2;
-	//XMFLOAT4 fill_color = lerp(fill_color1, fill_color2, normalized_ior);
+	XMFLOAT4 fill_color = LensColor(right.n.x, fill_color1, fill_color2);
+	fill_color.w = opaque ? opaque_alpha : fill_color.w;
+	
+	if (opaque)
+		stroke_color = stroke_color1;
+	else
+		stroke_color = stroke_color2;
 
 	//  |\      /|
 	//  | |    | |
@@ -1048,24 +1077,20 @@ void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
 
-	XMFLOAT4 color;
 	int i = 0;
 	while (i < (int)lens_interface.size()) {
-
-		//if (i == (ghost_bounce_1 - 1))
-		//	color = intersection_color2;
-		//else if (i == (ghost_bounce_2 - 2))
-		//	color = intersection_color3;
-		//else
-			color = fill_color1;
+		bool opaque1 = (i == ghost_bounce_1 - 1);
+		bool opaque2 = (i == ghost_bounce_2 - 1);
 		if (lens_interface[i].flat) {
 			DrawFlat(lens_interface[i]);
 			i += 1;
 		} else if (lens_interface[i].n.x == 1.f) {
-			DrawLens(lens_interface[i], lens_interface[i + 1], color);
+			opaque1 = opaque1 || (i == ghost_bounce_1 - 2);
+			opaque2 = opaque2 || (i == ghost_bounce_2 - 2);
+			DrawLens(lens_interface[i], lens_interface[i + 1], opaque1 || opaque2);
 			i += 2;
 		} else {
-			DrawLens(lens_interface[i - 1], lens_interface[i], color);
+			DrawLens(lens_interface[i - 1], lens_interface[i], opaque1 || opaque2);
 			i += 1;
 		}
 	}
@@ -1093,6 +1118,43 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->Draw((int)intersections.size(), 0);
 }
 
+void CycleBounces() {
+	ghost_bounce_1 = ghost_bounce_2 + 1 + (int)time;
+	if (ghost_bounce_1 == 15) time += 1.f;
+	if (ghost_bounce_2 == 15) ghost_bounce_2++;
+
+	if (ghost_bounce_1 >= (int)(Nikon_28_75mm_lens_interface.size())) {
+		ghost_bounce_2++;
+		time = 0.f;
+	}
+
+	if (ghost_bounce_2 >= (int)(Nikon_28_75mm_lens_interface.size())) {
+		ghost_bounce_2 = 1;
+		time = 0.f;
+	}
+}
+
+void AnimateFocusGroup() {
+	// Small animation hack
+	float anim_g4_lens = sin(time * 0.5f) * 0.01f;
+	for (int i = 6; i < 14; ++i) {
+		Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
+		Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
+	}
+}
+
+float AnimateRayDirection() {
+	return sin(time * swing_speed * PI) * swing_angle;
+}
+
+float AnimateSpread() {
+	float anim_rays_spread = (cos(time * spread_speed * PI) + 1.f) * 0.5f;
+	intersection_color1.w = lerp(0.05f, 0.01f, anim_rays_spread);
+	intersection_color2.w = lerp(0.70f, 0.01f, anim_rays_spread);
+	intersection_color3.w = lerp(0.70f, 0.01f, anim_rays_spread);
+	return lerp(rays_spread2, rays_spread1, anim_rays_spread);
+}
+
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
@@ -1105,16 +1167,11 @@ void Render() {
 	g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_Uniforms);
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_Uniforms);
 
-	static float time = 0.f; time += 0.01f;
-	float anim_ray_direction = sin(time) * 1.f;
-	float anim_g4_lens = sin(time * 0.5f) * 0.01f;
-	float rays_spread = 3.f;
-
-	// Small animation hack
-	// for (int i = 6; i < 14; ++i) {
-	// 	Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
-	// 	Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
-	// }
+	time += speed;
+	float anim_ray_direction = AnimateRayDirection();
+	float rays_spread = AnimateSpread();
+	//AnimateFocusGroup();
+	CycleBounces();
 
 	// Trace all rays
 	std::vector<std::vector<vec3>> intersections1(num_of_rays);
@@ -1125,21 +1182,24 @@ void Render() {
 		vec3 a = vec3(0.0f, pos, total_lens_distance);
 		vec3 b = vec3(0.0f, pos + anim_ray_direction, total_lens_distance + 10.f);
 		vec3 c = normalize(a - b);		
-		Ray r = { a - c * 100.f, c };
+		Ray r = { a - c * 20.f, c };
 		trace(r, 1.f, Nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 	}
 
 	// Draw all rays
+	XMFLOAT4 ghost_color1 = IntersectionColor(ghost_bounce_1 - 1);
+	XMFLOAT4 ghost_color2 = IntersectionColor(ghost_bounce_2 - 1);
 	for (int i = 0; i < num_of_rays; ++i)
 		DrawIntersections(g_pImmediateContext, g_IntersectionPoints1, intersections1[i], num_of_intersections_1, intersection_color1);
 
 	for (int i = 0; i < num_of_rays; ++i)
-		DrawIntersections(g_pImmediateContext, g_IntersectionPoints2, intersections2[i], num_of_intersections_2, intersection_color2);
+		DrawIntersections(g_pImmediateContext, g_IntersectionPoints2, intersections2[i], num_of_intersections_2, ghost_color1);
 
 	for (int i = 0; i < num_of_rays; ++i)
-		DrawIntersections(g_pImmediateContext, g_IntersectionPoints3, intersections3[i], num_of_intersections_3, intersection_color3);
+		DrawIntersections(g_pImmediateContext, g_IntersectionPoints3, intersections3[i], num_of_intersections_3, ghost_color2);
 
+	// Draw lenses
 	DrawLensInterface(Nikon_28_75mm_lens_interface);
 
-	g_pSwapChain->Present(0, 0);	
+	g_pSwapChain->Present(0, 0);
 }
