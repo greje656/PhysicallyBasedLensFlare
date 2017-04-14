@@ -162,12 +162,13 @@ UINT stride = sizeof(SimpleVertex);
 float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
 float time         = (float)ghost_bounce_1;
-float speed        = 0.001f;
-float swing_angle  = 1.0f;
+float speed        = 0.5f;
+float focus_speed  = 0.0f;
+float swing_angle  = 0.0f;
 float swing_speed  = 4.0f;
 float spread_speed = 2.0f;
 float rays_spread1 = 0.0f;
-float rays_spread2 = 5.0f;
+float rays_spread2 = 2.0f;
 
 XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 rgb = c;
@@ -1135,8 +1136,7 @@ void CycleBounces() {
 }
 
 void AnimateFocusGroup() {
-	// Small animation hack
-	float anim_g4_lens = sin(time * 0.5f) * 0.01f;
+	float anim_g4_lens = sin(time * focus_speed) * 0.01f;
 	for (int i = 6; i < 14; ++i) {
 		Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
 		Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
@@ -1155,6 +1155,23 @@ float AnimateSpread() {
 	return lerp(rays_spread2, rays_spread1, anim_rays_spread);
 }
 
+void Tick() {
+	time += speed * 0.01;
+	return;
+
+	if (g_driverType == D3D_DRIVER_TYPE_REFERENCE) {
+		time += (float)XM_PI * 0.0125f;
+	} else {
+		static ULONGLONG timeStart = 0;
+		ULONGLONG timeCur = GetTickCount64();
+		
+		if (timeStart == 0)
+			timeStart = timeCur;
+
+		time = (timeCur - timeStart) / 1000.0f * speed;
+	}
+}
+
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
@@ -1167,10 +1184,10 @@ void Render() {
 	g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_Uniforms);
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_Uniforms);
 
-	time += speed;
+	Tick();
 	float anim_ray_direction = AnimateRayDirection();
 	float rays_spread = AnimateSpread();
-	//AnimateFocusGroup();
+	AnimateFocusGroup();
 	CycleBounces();
 
 	// Trace all rays
