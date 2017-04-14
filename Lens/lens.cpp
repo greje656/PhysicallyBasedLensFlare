@@ -1156,9 +1156,9 @@ float AnimateSpread() {
 }
 
 void Tick() {
-	time += speed * 0.01;
-	return;
+	time += speed * 0.01f;
 
+	/*
 	if (g_driverType == D3D_DRIVER_TYPE_REFERENCE) {
 		time += (float)XM_PI * 0.0125f;
 	} else {
@@ -1170,6 +1170,7 @@ void Tick() {
 
 		time = (timeCur - timeStart) / 1000.0f * speed;
 	}
+	*/
 }
 
 //--------------------------------------------------------------------------------------
