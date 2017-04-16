@@ -56,7 +56,7 @@ struct PatentFormat {
 };
 
 struct SimpleVertex {
-	XMFLOAT3 Pos;
+	XMFLOAT3 pos;
 };
 
 struct Uniforms {
@@ -79,7 +79,7 @@ namespace LensShapes {
 
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
-std::vector<LensInterface> Nikon_28_75mm_lens_interface;
+std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
 const float d6  = 53.142f;
 const float d10 =  7.063f;
@@ -88,7 +88,7 @@ const float dAp =  2.800f;
 const float d20 = 16.889f;
 const float Bf  = 39.683f;
 
-std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
+std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f },
 	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f },
 
@@ -137,7 +137,7 @@ std::vector<PatentFormat> Nikon_28_75mm_lens_components = {
 };
 
 int num_of_rays = 151;
-int num_of_lens_components = (int)Nikon_28_75mm_lens_components.size();
+int num_of_lens_components = (int)nikon_28_75mm_lens_components.size();
 
 int ghost_bounce_1 = 2;
 int ghost_bounce_2 = 1;
@@ -156,19 +156,25 @@ float max_ior = -1000.f;
 float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
-INT sampleMask = 0x0F;
-UINT offset = 0;
-UINT stride = sizeof(SimpleVertex);
-float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
-
-float time         = (float)ghost_bounce_1;
-float speed        = 0.5f;
+float time         = 0.0f;
+float speed        = 1.5f;
 float focus_speed  = 0.0f;
 float swing_angle  = 0.0f;
 float swing_speed  = 4.0f;
 float spread_speed = 2.0f;
 float rays_spread1 = 0.0f;
 float rays_spread2 = 2.0f;
+
+int TimeToTick(int t) {
+	return (int)(t * 0.5f * 1000.0f * speed);
+}
+
+int timer_start = (int)GetTickCount64() - TimeToTick(ghost_bounce_1);
+
+INT sampleMask = 0x0F;
+UINT offset = 0;
+UINT stride = sizeof(SimpleVertex);
+float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
 XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 rgb = c;
@@ -194,14 +200,14 @@ XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 intersection_color3 = sRGB({ 179.f, 178.f, 210.f, 0.5f });
 #endif
 
-XMFLOAT3 point_to_d3d(vec3& point) {
+inline XMFLOAT3 point_to_d3d(vec3& point) {
 	float x = point.x;
 	float y = point.y / ratio* global_scale;
 	float z = point.z * global_scale;
 	return XMFLOAT3(-(z - 1.f), y, x);
 }
 
-float sign(float v) {
+inline float sign(float v) {
 	return v < 0.f ? -1.f : 1.f;
 }
 
@@ -251,10 +257,10 @@ ID3D11DepthStencilState* g_pDepthStencilStateGreaterOrEqualRead = NULL;
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
 void CleanupDevice();
-LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
 
 
@@ -406,9 +412,9 @@ LensShapes::Circle CreateUnitCircle() {
 		SimpleVertex to_add1;
 		SimpleVertex to_add2;
 		SimpleVertex to_add3;
-		to_add1.Pos = XMFLOAT3(x1, y1, 0.f);
-		to_add2.Pos = XMFLOAT3(x2, y2, 0.f);
-		to_add3.Pos = XMFLOAT3(0.f, 0.f, 0.f);
+		to_add1.pos = XMFLOAT3(x1, y1, 0.f);
+		to_add2.pos = XMFLOAT3(x2, y2, 0.f);
+		to_add3.pos = XMFLOAT3(0.f, 0.f, 0.f);
 
 		triangle_vertices.push_back(to_add1);
 		triangle_vertices.push_back(to_add2);
@@ -416,8 +422,9 @@ LensShapes::Circle CreateUnitCircle() {
 
 		line_vertices.push_back(to_add1);
 	}
+
 	SimpleVertex to_add;
-	to_add.Pos = XMFLOAT3(0.f, 1.f / ratio, 0.f);
+	to_add.pos = XMFLOAT3(0.f, 1.f / ratio, 0.f);
 	line_vertices.push_back(to_add);
 
 	D3D11_BUFFER_DESC bd1;
@@ -441,14 +448,37 @@ LensShapes::Circle CreateUnitCircle() {
 	InitData2.pSysMem = (float*)&line_vertices[0];
 
 	LensShapes::Circle circle;
-	circle.x = 0;
-	circle.y = 0;
+	circle.x = 0.f;
+	circle.y = 0.f;
 	circle.r = 1.f;
 
 	g_pd3dDevice->CreateBuffer(&bd1, &InitData1, &circle.triangles);
 	g_pd3dDevice->CreateBuffer(&bd2, &InitData2, &circle.lines);
 
 	return circle;
+}
+
+void ParseLensComponenets() {
+	// Parse the lens components into the LensInterface the ray_trace routine expects
+	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
+	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
+		PatentFormat& entry = nikon_28_75mm_lens_components[i];
+		total_lens_distance += entry.d;
+
+		float left_ior = i == 0 ? 1.f : nikon_28_75mm_lens_components[i - 1].n;
+		float right_ior = entry.n;
+
+		if (right_ior != 1.f) {
+			min_ior = min(min_ior, right_ior);
+			max_ior = max(max_ior, right_ior);
+		}
+
+		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
+		vec3 n = { left_ior, 1.f, right_ior };
+
+		LensInterface component = { total_lens_distance, center, entry.r, n, 1.f, 1.f, entry.flat, entry.w, entry.h };
+		nikon_28_75mm_lens_interface[i] = component;
+	}
 }
 
 //--------------------------------------------------------------------------------------
@@ -619,10 +649,10 @@ HRESULT InitDevice()
 	D3D11_VIEWPORT vp;
 	vp.Width = (FLOAT)width;
 	vp.Height = (FLOAT)height;
-	vp.MinDepth = 0.0f;
-	vp.MaxDepth = 1.0f;
-	vp.TopLeftX = 0;
-	vp.TopLeftY = 0;
+	vp.MinDepth = 0.f;
+	vp.MaxDepth = 1.f;
+	vp.TopLeftX = 0.f;
+	vp.TopLeftY = 0.f;
 	g_pImmediateContext->RSSetViewports( 1, &vp );
 
 	// Compile the vertex shader
@@ -764,29 +794,10 @@ HRESULT InitDevice()
 	bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_3;
 	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_IntersectionPoints3);
 
-	// Parse the lens components into the LensInterface the ray_trace routine expects
-	Nikon_28_75mm_lens_interface.resize(Nikon_28_75mm_lens_components.size());
-	for (int i = (int)Nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
-		PatentFormat& entry = Nikon_28_75mm_lens_components[i];
-		total_lens_distance += entry.d;
-
-		float left_ior  = i == 0 ? 1.f : Nikon_28_75mm_lens_components[i - 1].n;
-		float right_ior = entry.n;
-
-		if (right_ior != 1.f) {
-			min_ior = min(min_ior, right_ior);
-			max_ior = max(max_ior, right_ior);
-		}
-
-		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r};
-		vec3 n = { left_ior, 1.f, right_ior };
-
-		LensInterface component = { total_lens_distance, center, entry.r, n, 1.f, 1.f, entry.flat, entry.w, entry.h };
-		Nikon_28_75mm_lens_interface[i] = component;
-	}
-
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
+
+	ParseLensComponenets();
 
 	return S_OK;
 }
@@ -797,7 +808,6 @@ HRESULT InitDevice()
 //--------------------------------------------------------------------------------------
 void CleanupDevice() {
 	if( g_pImmediateContext ) g_pImmediateContext->ClearState();
-
 	if( g_pVertexBuffer ) g_pVertexBuffer->Release();
 	if( g_pVertexLayout ) g_pVertexLayout->Release();
 	if( g_pVertexShader ) g_pVertexShader->Release();
@@ -810,7 +820,6 @@ void CleanupDevice() {
 	if( g_pd3dDevice1 ) g_pd3dDevice1->Release();
 	if (g_pd3dDevice) g_pd3dDevice->Release();
 	if (g_Uniforms) g_Uniforms->Release();
-
 	if (g_IntersectionPoints1) g_IntersectionPoints1->Release();
 	if (g_IntersectionPoints2) g_IntersectionPoints2->Release();
 	if (g_IntersectionPoints3) g_IntersectionPoints3->Release();
@@ -907,7 +916,7 @@ XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
 }
 
 XMFLOAT4 IntersectionColor(int i) {
-	float ior1 = Nikon_28_75mm_lens_interface[i].n.x == 1.f ? Nikon_28_75mm_lens_interface[i].n.z : Nikon_28_75mm_lens_interface[i].n.x;
+	float ior1 = nikon_28_75mm_lens_interface[i].n.x == 1.f ? nikon_28_75mm_lens_interface[i].n.z : nikon_28_75mm_lens_interface[i].n.x;
 	return LensColor(ior1, intersection_color2, intersection_color3);
 }
 
@@ -1121,25 +1130,26 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 
 void CycleBounces() {
 	ghost_bounce_1 = ghost_bounce_2 + 1 + (int)time;
-	if (ghost_bounce_1 == 15) time += 1.f;
+
+	if (ghost_bounce_1 == 15) timer_start -= TimeToTick(1);
 	if (ghost_bounce_2 == 15) ghost_bounce_2++;
 
-	if (ghost_bounce_1 >= (int)(Nikon_28_75mm_lens_interface.size())) {
+	if (ghost_bounce_1 >= (int)(nikon_28_75mm_lens_interface.size())) {
 		ghost_bounce_2++;
-		time = 0.f;
+		timer_start = (int)GetTickCount64();
 	}
 
-	if (ghost_bounce_2 >= (int)(Nikon_28_75mm_lens_interface.size())) {
+	if (ghost_bounce_2 >= (int)(nikon_28_75mm_lens_interface.size())) {
 		ghost_bounce_2 = 1;
-		time = 0.f;
+		timer_start = (int)GetTickCount64();
 	}
 }
 
 void AnimateFocusGroup() {
 	float anim_g4_lens = sin(time * focus_speed) * 0.01f;
 	for (int i = 6; i < 14; ++i) {
-		Nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
-		Nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
+		nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
+		nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
 	}
 }
 
@@ -1150,27 +1160,14 @@ float AnimateRayDirection() {
 float AnimateSpread() {
 	float anim_rays_spread = (cos(time * spread_speed * PI) + 1.f) * 0.5f;
 	intersection_color1.w = lerp(0.05f, 0.01f, anim_rays_spread);
-	intersection_color2.w = lerp(0.50f, 0.01f, anim_rays_spread);
-	intersection_color3.w = lerp(0.50f, 0.01f, anim_rays_spread);
+	intersection_color2.w = lerp(0.30f, 0.01f, anim_rays_spread);
+	intersection_color3.w = lerp(0.30f, 0.01f, anim_rays_spread);
 	return lerp(rays_spread2, rays_spread1, anim_rays_spread);
 }
 
 void Tick() {
-	time += speed * 0.01f;
-
-	/*
-	if (g_driverType == D3D_DRIVER_TYPE_REFERENCE) {
-		time += (float)XM_PI * 0.0125f;
-	} else {
-		static ULONGLONG timeStart = 0;
-		ULONGLONG timeCur = GetTickCount64();
-		
-		if (timeStart == 0)
-			timeStart = timeCur;
-
-		time = (timeCur - timeStart) / 1000.0f * speed;
-	}
-	*/
+	//time += speed * 0.01f;
+	time = (GetTickCount64() - timer_start) / 1000.0f * speed;
 }
 
 //--------------------------------------------------------------------------------------
@@ -1201,7 +1198,7 @@ void Render() {
 		vec3 b = vec3(0.0f, pos + anim_ray_direction, total_lens_distance + 10.f);
 		vec3 c = normalize(a - b);		
 		Ray r = { a - c * 20.f, c };
-		trace(r, 1.f, Nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
+		Trace(r, 1.f, nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 	}
 
 	// Draw all rays
@@ -1217,7 +1214,8 @@ void Render() {
 		DrawIntersections(g_pImmediateContext, g_IntersectionPoints3, intersections3[i], num_of_intersections_3, ghost_color2);
 
 	// Draw lenses
-	DrawLensInterface(Nikon_28_75mm_lens_interface);
+	DrawLensInterface(nikon_28_75mm_lens_interface);
+	
 
 	g_pSwapChain->Present(0, 0);
 }

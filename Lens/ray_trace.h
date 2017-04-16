@@ -158,7 +158,7 @@ float FresnelAR(
 	return (out_s2 + out_p2) / 2.f; 
 }
 
-Ray trace(
+Ray Trace(
 	Ray r,
 	float lambda,
 	std::vector<LensInterface>& INTERFACE,
