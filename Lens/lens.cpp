@@ -458,7 +458,7 @@ LensShapes::Circle CreateUnitCircle() {
 	return circle;
 }
 
-void ParseLensComponenets() {
+void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
 	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
 	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
@@ -797,7 +797,7 @@ HRESULT InitDevice()
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
 
-	ParseLensComponenets();
+	ParseLensComponents();
 
 	return S_OK;
 }
