@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <string>
+#include <sstream>
 
 #include "resource.h"
 #include "ray_trace.h"
@@ -156,7 +157,7 @@ float max_ior = -1000.f;
 float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
-float time         = 0.0f;
+float time         = (float)ghost_bounce_1;
 float speed        = 1.5f;
 float focus_speed  = 0.0f;
 float swing_angle  = 0.0f;
@@ -164,6 +165,31 @@ float swing_speed  = 4.0f;
 float spread_speed = 2.0f;
 float rays_spread1 = 0.0f;
 float rays_spread2 = 2.0f;
+
+#ifdef SAVE_BACK_BUFFER_TO_DISK
+#include <DirectXTex.h>
+void SaveBackBuffer() {
+	ScratchImage scratch_image;
+	ID3D11Resource* resource = nullptr;
+	g_pRenderTargetView->GetResource(&resource);
+	CaptureTexture(g_pd3dDevice, g_pImmediateContext, resource, scratch_image);
+
+	static int frame_number = 0;
+	frame_number++;
+	std::wstringstream finle_name;
+	finle_name << "Lens";
+	if (frame_number < 10)
+		finle_name << "00";
+	else if (frame_number < 100)
+		finle_name << "0";
+
+	finle_name << frame_number;
+	finle_name << ".tga";
+
+	const Image* image = scratch_image.GetImage(0, 0, 0);
+	SaveToTGAFile(*image, finle_name.str().c_str());
+}
+#endif
 
 int TimeToTick(int t) {
 	return (int)(t * 0.5f * 1000.0f * speed);
@@ -1216,6 +1242,7 @@ void Render() {
 	// Draw lenses
 	DrawLensInterface(nikon_28_75mm_lens_interface);
 	
-
 	g_pSwapChain->Present(0, 0);
+
+	// SaveBackBuffer();
 }
