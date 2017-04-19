@@ -138,7 +138,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 };
 
 int num_of_rays = 151;
-int num_of_lens_components = (int)nikon_28_75mm_lens_components.size();
+int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
 
 int ghost_bounce_1 = 2;
 int ghost_bounce_2 = 1;
@@ -191,11 +191,11 @@ void SaveBackBuffer() {
 }
 #endif
 
-int TimeToTick(int t) {
-	return (int)(t * 0.5f * 1000.0f * speed);
+ULONGLONG TimeToTick(int t) {
+	return (ULONGLONG)(t * 0.5f * 1000.0f * speed);
 }
 
-int timer_start = (int)GetTickCount64() - TimeToTick(ghost_bounce_1);
+ULONGLONG timer_start = (ULONGLONG)GetTickCount64() - TimeToTick(ghost_bounce_1);
 
 INT sampleMask = 0x0F;
 UINT offset = 0;
@@ -1162,12 +1162,12 @@ void CycleBounces() {
 
 	if (ghost_bounce_1 >= (int)(nikon_28_75mm_lens_interface.size())) {
 		ghost_bounce_2++;
-		timer_start = (int)GetTickCount64();
+		timer_start = GetTickCount64();
 	}
 
 	if (ghost_bounce_2 >= (int)(nikon_28_75mm_lens_interface.size())) {
 		ghost_bounce_2 = 1;
-		timer_start = (int)GetTickCount64();
+		timer_start = GetTickCount64();
 	}
 }
 
