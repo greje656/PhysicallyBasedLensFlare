@@ -1,5 +1,10 @@
-cbuffer Uniforms : register(b0) {
+cbuffer InstanceUniforms : register(b0) {
 	float4 color;
+	float4 placement;
+};
+
+cbuffer GlobalUniforms : register(b1) {
+	float time, a, b, c;
 	float4 direction;
 };
 
@@ -13,7 +18,7 @@ struct PS_INPUT {
 //--------------------------------------------------------------------------------------
 PS_INPUT VS( float4 Pos : POSITION ) {
 	PS_INPUT res;
-	res.Position = Pos + float4(0.f, sin(direction.r) * 0.25, 0.f, 0.f);
+	res.Position = Pos + float4(0.f, sin(time.r) * 0.25, 0.f, 0.f);
 	res.Texture = Pos.xy + 0.5;
 	return res;
 }

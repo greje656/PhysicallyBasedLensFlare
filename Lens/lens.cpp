@@ -77,9 +77,15 @@ struct SimpleVertex {
 	XMFLOAT3 pos;
 };
 
-struct Uniforms {
+struct InstanceUniforms {
 	XMFLOAT4 color;
 	XMFLOAT4 placement;
+};
+
+struct GlobalUniforms {
+	float time, a, b, c;
+	XMFLOAT4 direction;
+
 };
 
 namespace LensShapes {
@@ -299,7 +305,8 @@ ID3D11PixelShader*       g_pFlarePixelShader = nullptr;
 
 ID3D11InputLayout*       g_pVertexLayout = nullptr;
 ID3D11Buffer*            g_pVertexBuffer = nullptr;
-ID3D11Buffer*            g_Uniforms = nullptr;
+ID3D11Buffer*            g_GlobalUniforms = nullptr;
+ID3D11Buffer*            g_InstanceUniforms = nullptr;
 ID3D11Buffer*            g_IntersectionPoints1 = nullptr;
 ID3D11Buffer*            g_IntersectionPoints2 = nullptr;
 ID3D11Buffer*            g_IntersectionPoints3 = nullptr;
@@ -396,16 +403,16 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow ) {
 }
 
 HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
-	return D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, nullptr);
+	ID3DBlob* temp = nullptr;
+	HRESULT hr = D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
+	char* msg = temp ? (char*)temp : nullptr; msg;
+	return hr;
 }
 
 HRESULT CompileShaderFromFile(LPCWSTR shaderFile, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
 	ID3DBlob* temp = nullptr;
-	
 	HRESULT hr = D3DCompileFromFile(shaderFile, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);	
-	char* msg = temp ? (char*)temp : nullptr;
-	msg;
-
+	char* msg = temp ? (char*)temp : nullptr; msg;
 	return hr;
 }
 
@@ -902,8 +909,15 @@ HRESULT InitDevice()
 	bd.Usage = D3D11_USAGE_DEFAULT;
 	bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	bd.CPUAccessFlags = 0;
-	bd.ByteWidth = sizeof(Uniforms);
-	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_Uniforms);
+	bd.ByteWidth = sizeof(InstanceUniforms);
+	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_InstanceUniforms);
+
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	bd.CPUAccessFlags = 0;
+	bd.ByteWidth = sizeof(GlobalUniforms);
+	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_GlobalUniforms);
 
 	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
@@ -941,7 +955,7 @@ void CleanupDevice() {
 	if( g_pImmediateContext ) g_pImmediateContext->Release();
 	if( g_pd3dDevice1 ) g_pd3dDevice1->Release();
 	if (g_pd3dDevice) g_pd3dDevice->Release();
-	if (g_Uniforms) g_Uniforms->Release();
+	if (g_InstanceUniforms) g_InstanceUniforms->Release();
 	if (g_IntersectionPoints1) g_IntersectionPoints1->Release();
 	if (g_IntersectionPoints2) g_IntersectionPoints2->Release();
 	if (g_IntersectionPoints3) g_IntersectionPoints3->Release();
@@ -981,8 +995,8 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 }
 
 void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
-	Uniforms cb = { color, placement };
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	InstanceUniforms cb = { color, placement };
+	context->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
 	if (filled) {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
@@ -996,8 +1010,8 @@ void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangl
 }
 
 void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
-	Uniforms cb = { color, placement };
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	InstanceUniforms cb = { color, placement };
+	context->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
 	if (filled) {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		context->IASetVertexBuffers(0, 1, &circle.triangles, &stride, &offset);
@@ -1229,7 +1243,7 @@ void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
 }
 
 void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::vector<vec3>& intersections, int max_points, XMFLOAT4& color) {
-	Uniforms cb;
+	InstanceUniforms cb;
 	cb.color = color;
 	cb.placement = XMFLOAT4(0.f, 0.f, 0.f, 0.f);
 
@@ -1240,7 +1254,7 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 
 	void* ptr = &points.front();
 	context->UpdateSubresource(buffer, 0, nullptr, ptr, 0, 0);
-	context->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	context->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
 	
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
@@ -1251,11 +1265,11 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 }
 
 void DrawPatch(LensShapes::Patch& patch, XMFLOAT4& color) {
-	Uniforms cb;
+	InstanceUniforms cb;
 	cb.color = color;
-	cb.placement = XMFLOAT4(time, 0.f, 0.f, 0.f);
+	cb.placement = XMFLOAT4(0.f, 0.f, 0.f, 0.f);
 
-	g_pImmediateContext->UpdateSubresource(g_Uniforms, 0, nullptr, &cb, 0, 0);
+	g_pImmediateContext->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
 
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
@@ -1310,6 +1324,9 @@ float AnimateSpread() {
 void Tick() {
 	//time += speed * 0.01f;
 	time = (GetTickCount64() - timer_start) / 1000.0f * speed;
+
+	GlobalUniforms cb = { time };
+	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1324,8 +1341,10 @@ void Render() {
 	
 		g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_Uniforms);
-		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_Uniforms);
+		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 
 		DrawPatch(unit_patch, fill_color1);
 	#else
@@ -1334,8 +1353,8 @@ void Render() {
 	
 		g_pImmediateContext->VSSetShader(g_pVertexShader, nullptr, 0);
 		g_pImmediateContext->PSSetShader(g_pPixelShader, nullptr, 0);
-		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_Uniforms);
-		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_Uniforms);
+		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 
 		float anim_ray_direction = AnimateRayDirection();
 		float rays_spread = AnimateSpread();
