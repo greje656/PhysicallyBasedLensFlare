@@ -83,7 +83,10 @@ struct InstanceUniforms {
 };
 
 struct GlobalUniforms {
-	float time, a, b, c;
+	float time;
+	float g1;
+	float g2;
+	float padding;
 	XMFLOAT4 direction;
 
 };
@@ -195,10 +198,10 @@ float focus_speed  = 0.0f;
 float swing_angle  = 0.0f;
 float swing_speed  = 4.0f;
 float spread_speed = 2.0f;
-float rays_spread1 = 0.0f;
+float rays_spread1 = 2.0f;
 float rays_spread2 = 2.0f;
 
-int patch_tessellation = 5;
+int patch_tessellation = 20;
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
@@ -412,7 +415,7 @@ HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, L
 HRESULT CompileShaderFromFile(LPCWSTR shaderFile, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
 	ID3DBlob* temp = nullptr;
 	HRESULT hr = D3DCompileFromFile(shaderFile, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);	
-	char* msg = temp ? (char*)temp : nullptr; msg;
+	char* msg = temp ? (char*)temp->GetBufferPointer() : nullptr; msg;
 	return hr;
 }
 
@@ -606,6 +609,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
 	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
+
 	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
 		PatentFormat& entry = nikon_28_75mm_lens_components[i];
 		total_lens_distance += entry.d;
@@ -622,8 +626,23 @@ void ParseLensComponents() {
 		vec3 n = { left_ior, 1.f, right_ior };
 
 		LensInterface component = { total_lens_distance, center, entry.r, n, 1.f, 1.f, entry.flat, entry.w, entry.h };
+		
 		nikon_28_75mm_lens_interface[i] = component;
 	}
+	
+	std::stringstream s;
+	s << "#define NUM_INTERFACE " << nikon_28_75mm_lens_components.size() << "\n";
+	s << "static LensInterface interfaces[NUM_INTERFACE] = {\n\n";
+	for (int i = 0; i < (int)nikon_28_75mm_lens_interface.size(); ++i) {
+		LensInterface& c = nikon_28_75mm_lens_interface[i];
+		s << "    { float3(" << c.center.x << ", " << c.center.y << ", " << c.center.z << "), " << c.radius << ", ";
+		s << "float3(" << c.n.x << ", " << c.n.y << ", " << c.n.z << "), " << c.sa << ", " << c.d1 << ", ";
+		s << (c.flat ? "true" : "false") << ", " << c.h << " },\n";
+	}
+	s << "\n};";
+
+	std::string sss = s.str();
+	int tt = 0; tt;
 }
 
 //--------------------------------------------------------------------------------------
@@ -1275,13 +1294,19 @@ void DrawPatch(LensShapes::Patch& patch, XMFLOAT4& color) {
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
 
 	g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	//g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 	
 	g_pImmediateContext->IASetVertexBuffers(0, 1, &patch.vertices, &stride, &offset);
 	g_pImmediateContext->IASetIndexBuffer(patch.indices, DXGI_FORMAT_R32_UINT, 0);
 	
 	int t = patch_tessellation - 1;
 	g_pImmediateContext->DrawIndexed(t * t * 3 * 2, 0, 0);
+
+	cb.color.w = 1.f;
+	g_pImmediateContext->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
+	
+	g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+	g_pImmediateContext->DrawIndexed(t * t * 3 * 2, 0, 0);
+
 }
 
 void CycleBounces() {
@@ -1325,7 +1350,7 @@ void Tick() {
 	//time += speed * 0.01f;
 	time = (GetTickCount64() - timer_start) / 1000.0f * speed;
 
-	GlobalUniforms cb = { time };
+	GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2 };
 	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
@@ -1334,6 +1359,7 @@ void Tick() {
 //--------------------------------------------------------------------------------------
 void Render() {
 	Tick();
+	CycleBounces();
 
 	#if defined(DRAW3D)
 		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
@@ -1359,7 +1385,6 @@ void Render() {
 		float anim_ray_direction = AnimateRayDirection();
 		float rays_spread = AnimateSpread();
 		AnimateFocusGroup();
-		CycleBounces();
 
 		// Trace all rays
 		std::vector<std::vector<vec3>> intersections1(num_of_rays);

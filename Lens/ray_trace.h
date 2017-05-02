@@ -89,7 +89,7 @@ vec3 refract(vec3 i, vec3 n, float eta) {
 }
 
 float length_xy(vec3& v) {
-	return sqrt(v.z * v.z + v.y * v.y);
+	return sqrt(v.x * v.x + v.y * v.y);
 }
 
 int2 BOUNCE[NUM_BOUNCE];
@@ -201,7 +201,7 @@ Ray Trace(
 			intersections3.push_back(i.pos);
 		}
 
-		if (abs(i.pos.y) > F.h) break;
+		//if (abs(i.pos.y) > F.h) break;
 
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);
