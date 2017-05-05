@@ -174,14 +174,14 @@ Ray Trace(
 
 	intersections1.push_back(r.pos);
 
-	int LEN = STR.x + (STR.x - STR.y) + ((int)INTERFACE.size() - STR.y);
+	int LEN = STR.x + (STR.x - STR.y) + ((int)INTERFACE.size() - STR.y) - 1;
 
 	int PHASE = 0;
 	int DELTA = 1;
 	int T = 1;
 	int k;
 	for (k = 0; k < LEN; k++, T += DELTA) {
-		LensInterface F = INTERFACE[T - 1];
+		LensInterface F = INTERFACE[T];
 
 		bool bReflect = (T == STR[PHASE]) ? true : false;
 		if (bReflect) { DELTA = -DELTA; PHASE++; }

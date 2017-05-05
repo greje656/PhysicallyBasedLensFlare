@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW3D
 //#define DRAW2D
+#define DRAW3D
 
 using namespace DirectX;
 
@@ -175,7 +175,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 int num_of_rays = 151;
 int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
 
-int ghost_bounce_1 = 2;
+int ghost_bounce_1 = 16;
 int ghost_bounce_2 = 1;
 
 int num_of_intersections_1 = num_of_lens_components;
@@ -193,15 +193,15 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
-float speed        = 1.5f;
+float speed        = 11.5f;
 float focus_speed  = 0.0f;
 float swing_angle  = 0.0f;
-float swing_speed  = 4.0f;
+float swing_speed  = 0.0f;
 float spread_speed = 2.0f;
-float rays_spread1 = 2.0f;
-float rays_spread2 = 2.0f;
+float rays_spread1 = 1.75f;
+float rays_spread2 = 1.75f;
 
-int patch_tessellation = 20;
+int patch_tessellation = 50;
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
@@ -305,6 +305,7 @@ ID3D11PixelShader*       g_pPixelShader = nullptr;
 
 ID3D11VertexShader*      g_pFlareVertexShader = nullptr;
 ID3D11PixelShader*       g_pFlarePixelShader = nullptr;
+ID3D11GeometryShader*    g_pGeometryShader = nullptr;
 
 ID3D11InputLayout*       g_pVertexLayout = nullptr;
 ID3D11Buffer*            g_pVertexBuffer = nullptr;
@@ -539,10 +540,10 @@ LensShapes::Circle CreateUnitCircle() {
 
 LensShapes::Patch CreateUnitPatch(int subdiv) {
 
-	float l = -0.5f;
-	float r =  0.5f;
-	float b = -0.5f;
-	float t =  0.5f;
+	float l = -1.0f;
+	float r =  1.0f;
+	float b = -1.0f;
+	float t =  1.0f;
 
 	std::vector<SimpleVertex> vertices;
 	for (int y = 0; y < subdiv; ++y) {
@@ -625,8 +626,7 @@ void ParseLensComponents() {
 		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
 		vec3 n = { left_ior, 1.f, right_ior };
 
-		LensInterface component = { total_lens_distance, center, entry.r, n, 1.f, 1.f, entry.flat, entry.w, entry.h };
-		
+		LensInterface component = { total_lens_distance, center, entry.r, n, entry.h, 1.38f, entry.flat, entry.w, entry.h };
 		nikon_28_75mm_lens_interface[i] = component;
 	}
 	
@@ -846,6 +846,10 @@ HRESULT InitDevice()
 	//hr = CompileShaderFromSource(flare_pixel_shader_source, "PS", "ps_5_0", &blob);
 	hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
 	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlarePixelShader);
+	blob->Release();
+
+	hr = CompileShaderFromFile(L"lens.hlsl", "GS", "gs_5_0", &blob);
+	hr = g_pd3dDevice->CreateGeometryShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pGeometryShader);
 	blob->Release();
 
 	D3D11_BLEND_DESC BlendState;
@@ -1304,23 +1308,25 @@ void DrawPatch(LensShapes::Patch& patch, XMFLOAT4& color) {
 	cb.color.w = 1.f;
 	g_pImmediateContext->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
 	
-	g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-	g_pImmediateContext->DrawIndexed(t * t * 3 * 2, 0, 0);
+	//g_pImmediateContext->GSSetShader(nullptr, nullptr, 0);
+	//g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+	//g_pImmediateContext->DrawIndexed(t * t * 3 * 2, 0, 0);
 
 }
 
 void CycleBounces() {
+
 	ghost_bounce_1 = ghost_bounce_2 + 1 + (int)time;
 
 	if (ghost_bounce_1 == 15) timer_start -= TimeToTick(1);
 	if (ghost_bounce_2 == 15) ghost_bounce_2++;
 
-	if (ghost_bounce_1 >= (int)(nikon_28_75mm_lens_interface.size())) {
+	if (ghost_bounce_1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
 		ghost_bounce_2++;
 		timer_start = GetTickCount64();
 	}
 
-	if (ghost_bounce_2 >= (int)(nikon_28_75mm_lens_interface.size())) {
+	if (ghost_bounce_2 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
 		ghost_bounce_2 = 1;
 		timer_start = GetTickCount64();
 	}
@@ -1367,8 +1373,12 @@ void Render() {
 	
 		g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
+		g_pImmediateContext->GSSetShader(g_pGeometryShader, nullptr, 0);
+		
 		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+		g_pImmediateContext->GSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->GSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 

@@ -11,6 +11,7 @@ cbuffer GlobalUniforms : register(b1) {
 struct PS_INPUT {
 	float4 Position : SV_POSITION;
 	float4 Texture : TEXCOORD0;
+	float4 Mask : TEXCOORD1;
 };
 
 struct LensInterface {
@@ -37,7 +38,7 @@ struct Intersection {
 };
 
 #define NUM_BOUNCE 2
-#define AP_IDX 15
+#define AP_IDX 14
 #define PI 3.14159265359f
 
 #define NUM_INTERFACE 29
@@ -78,7 +79,6 @@ static LensInterface interfaces[NUM_INTERFACE] = {
 int2 BOUNCE[NUM_BOUNCE];
 int LENGTH[NUM_BOUNCE];
 
-
 Intersection testFLAT(Ray r, LensInterface F) {
 	Intersection i;
 	i.pos = r.pos + r.dir * ((F.center.z - r.pos.z) / r.dir.z);
@@ -117,7 +117,7 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 
 	float rs01 = -sin(theta0-theta1) / sin(theta0 + theta1);
 	float rp01 =  tan(theta0-theta1) / tan(theta0 + theta1);
-	float ts01 = 2 * sin(theta1) *cos(theta0) / sin(theta0 + theta1);
+	float ts01 = 2.f * sin(theta1) *cos(theta0) / sin(theta0 + theta1);
 	float tp01 = ts01*cos(theta0-theta1);
 
 	float rs12 = -sin(theta1-theta2) / sin(theta1 + theta2);
@@ -130,79 +130,118 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 	float delay = sqrt(dx*dx + dy*dy);
 	float relPhase = 4.f * PI / lambda*(delay-dx*sin(theta0));
 
-	float out_s2 = rs01*rs01 + ris*ris + 2 * rs01*ris*cos(relPhase);
-	float out_p2 = rp01*rp01 + rip*rip + 2 * rp01*rip*cos(relPhase);
+	float out_s2 = rs01*rs01 + ris*ris + 2.f * rs01*ris*cos(relPhase);
+	float out_p2 = rp01*rp01 + rip*rip + 2.f * rp01*rip*cos(relPhase);
 	
 	return (out_s2 + out_p2) / 2.f; 
 }
 
+float Reflectance(float lambda, float d, float theta1, float n1, float n2, float n3)
+{
+    // Apply Snell's law to get the other angles
+    float theta2 = asin(n1 * sin(theta1) / n2);
+    float theta3 = asin(n1 * sin(theta1) / n3);
+ 
+    float cos1 = cos(theta1);
+    float cos2 = cos(theta2);
+    float cos3 = cos(theta3);
+ 
+    float beta = (2.0f * 3.14159265359) / lambda * n2 * d * cos2;
+ 
+    // Compute the fresnel terms for the first and second interfaces for both s and p polarized
+    // light
+    float r12p = (n2 * cos1 - n1 * cos2) / (n2 * cos1 + n1 * cos2);
+    float r12p2 = r12p * r12p;
+ 
+    float r23p = (n3 * cos2 - n2 * cos3) / (n3 * cos2 + n2 * cos3);
+    float r23p2 = r23p * r23p;
+ 
+    float rp = (r12p2 + r23p2 + 2.0f * r12p * r23p * cos(2.0f * beta)) /
+        (1.0f + r12p2 * r23p2 + 2.0f * r12p * r23p * cos(2.0f * beta));
+ 
+    float r12s = (n1 * cos1 - n2 * cos2) / (n1 * cos1 + n2 * cos2);
+    float r12s2 = r12s * r12s;
+ 
+    float r23s = (n2 * cos2 - n3 * cos3) / (n2 * cos2 + n3 * cos3);
+    float r23s2 = r23s * r23s;
+ 
+    float rs = (r12s2 + r23s2 + 2.0f * r12s * r23s * cos(2.0f * beta)) /
+        (1.0f + r12s2 * r23s2 + 2.0f * r12s * r23s * cos(2.0f * beta));
+ 
+    return (rs + rp) * 0.5f;
+}
 
 Ray Trace( Ray r, float lambda, int2 STR) {
 
 	static int2 BOUNCE[NUM_BOUNCE];
 	static int LENGTH[NUM_BOUNCE];
 
-	int LEN = STR.x + (STR.x - STR.y) + (NUM_INTERFACE - STR.y);
+	int LEN = STR.x + (STR.x - STR.y) + (NUM_INTERFACE - STR.y) - 1;
 
 	int PHASE = 0;
 	int DELTA = 1;
 	int T = 1;
 	int k;
-	for (k = 0; k < LEN; k++, T += DELTA) {
-		LensInterface F = interfaces[T - 1];
 
-		bool bReflect = (T == STR[PHASE]) ? true : false;
+	[loop]
+	for( k=0; k < LEN; k++, T += DELTA ) {
 		
-		if (bReflect) { 
-			DELTA = -DELTA; PHASE++;
-		}
-		
+		LensInterface F = interfaces[T];
+
+		bool bReflect = (T==STR[PHASE]) ? true : false;
+		if (bReflect) { DELTA = -DELTA; PHASE++; } // intersection test
+
 		Intersection i;
-		
-		[branch]
 		if(F.flat)
-			i = testFLAT(r, F);
-		else
-			i = testSPHERE(r, F);
+			i = testFLAT(r,F);
+		else 
+			i = testSPHERE(r,F);
 
-		if (!i.hit) break;
+		[branch]
+		if (!i.hit){
+			r.pos = i.pos;
+			break; // exit upon miss
+		}
 
-		//if ((length(i.pos.xy)) > F.h) break;
-
+		// record texture coord . or max. rel . radius
+		[branch]
 		if (!F.flat)
-			r.tex.z = max(r.tex.z, length(i.pos.xy) / F.sa);
-		else if (T == AP_IDX) {
-			r.tex.x = i.pos.x / interfaces[AP_IDX - 1].radius;
-			r.tex.y = i.pos.y / interfaces[AP_IDX - 1].radius;
-		};
+			r.tex.z = max(r.tex.z, length(i.pos.xy) / F.h);
+		else if(T==AP_IDX) // iris aperture plane
+			r.tex.xy = i.pos.xy/interfaces[AP_IDX].radius; // update ray direction and position
 
-		r.dir = normalize(i.pos-r.pos);
+		r.dir = normalize(i.pos- r.pos);
+
+		if (i.inverted) r.dir *= -1.f; // correct an ← inverted ray
 		
-		if (i.inverted) r.dir *= -1;
 		r.pos = i.pos;
-		
+
+		// skip reflection / refraction for flat surfaces
 		if (F.flat) continue;
-		
-		float n0 = r.dir.z < 0 ? F.n.x : F.n.z;
+
+		// do reflection / refraction for spher . surfaces
+		float n0 = r.dir.z < 0.f ? F.n.x : F.n.z;
 		float n1 = F.n.y;
-		float n2 = r.dir.z < 0 ? F.n.z : F.n.x;
+		float n2 = r.dir.z < 0.f ? F.n.z : F.n.x;
 
-		if (!bReflect) {
-			r.dir = refract(r.dir , i.norm , n0 / n2);
-			if (length(r.dir) == 0.f) break;
+		if (!bReflect) // refraction
+		{
+			r.dir = refract(r.dir,i.norm,n0/n2);
+			if(length(r.dir)==0) break; // total reflection
 		}
-		else {
-			r.dir = reflect(r.dir , i.norm);
-			float R = FresnelAR(i.theta , lambda , F.d1 , n0 , n1 , n2);
-			r.tex.a *= R; 
+		else // reflection with AR Coating
+		{
+			r.dir = reflect(r.dir,i.norm);
+			float _lambda = 5.4e-7;
+			float _n1 = max(sqrt(n0*n2) , 1.38) ; // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
+			float _Fd1 = _lambda / 4.f / _n1;
+			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2) * 0.1;
+			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			r.tex.a *= R; // update ray intensity
 		}
-
-		
 	}
 
-	//r.tex = float4(1,0,0,0.5);
-	r.tex.b = 0.f;
-	r.tex.a = color.a;
+	if (k<LEN) r.tex.a=0; // early−exit rays = invalid
 	return r;
 }
 
@@ -212,18 +251,36 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 PS_INPUT VS( float4 Pos : POSITION ) {
 	PS_INPUT res;
 	res.Position = Pos;
+	res.Mask = Pos;
 	
 	Ray r;
-	r.tex = float4(1,1,1,1);
-	r.pos = float3(Pos.xy * 2.0, 300.f);
+	r.tex = float4(0,0,0,1);
+	r.pos = float3(Pos.xy * 1.f, 300.f);
 	r.dir = normalize(float3(0.f, 0.F, -1.f));
 
 	Ray g = Trace(r, 1.f, int2(g1, g2));
-	res.Position.xyz = float3(g.pos.xy * 0.009 * 30.f, 0.f);
+
+	res.Position.xyz = float3(g.pos.xy * 0.0009f *10.f, 0.f);
 	res.Position.x *= 0.5f;
+
 	res.Texture = g.tex;
 
 	return res;
+}
+
+[maxvertexcount(3)]
+void GS(triangle PS_INPUT input[3], inout TriangleStream<PS_INPUT> outputStream)
+{
+
+	PS_INPUT p0 = input[0];
+	PS_INPUT p1 = input[1];
+	PS_INPUT p2 = input[2];
+
+	outputStream.Append(p0);
+	outputStream.Append(p1);
+	outputStream.Append(p2);
+
+	outputStream.RestartStrip();
 }
 
 //--------------------------------------------------------------------------------------
@@ -231,9 +288,10 @@ PS_INPUT VS( float4 Pos : POSITION ) {
 //--------------------------------------------------------------------------------------
 float4 PS( in PS_INPUT In ) : SV_Target {
 
+	float light_intensity = length(In.Mask.xy) < 1.0f ? 1.f : 0.f;
+	float4 color = In.Texture;
+	float alpha = color.a * (color.z <= 1.f);
+	float v = 100.f;//saturate(color.z);
+    return float4(v,v,v, alpha * light_intensity * 10);
 
-	float4 res = In.Texture;
-	res.a = length(In.Texture.xy) < 0.5 ? 1.f : 0.1f;
-
-    return res;
 }
