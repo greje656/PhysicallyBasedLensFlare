@@ -201,7 +201,7 @@ Ray Trace(
 			intersections3.push_back(i.pos);
 		}
 
-		//if (abs(i.pos.y) > F.h) break;
+		if (abs(i.pos.y) > F.h) break;
 
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);

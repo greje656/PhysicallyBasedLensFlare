@@ -12,7 +12,8 @@
 #include "ray_trace.h"
 
 //#define DRAW2D
-#define DRAW3D
+//#define DRAW3D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -169,13 +170,13 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f },
 	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f },
 
-	{        0.f,     5.f, 1.00000f,  true, 17.f,  0.0f },
+	{        0.f,     5.f, 1.00000f,  true, 20.f,  0.0f },
 };
 
 int num_of_rays = 151;
 int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
 
-int ghost_bounce_1 = 16;
+int ghost_bounce_1 = 22;//22;
 int ghost_bounce_2 = 1;
 
 int num_of_intersections_1 = num_of_lens_components;
@@ -193,10 +194,10 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
-float speed        = 11.5f;
+float speed        = 10.5f;
 float focus_speed  = 0.0f;
-float swing_angle  = 0.0f;
-float swing_speed  = 0.0f;
+float swing_angle  = 0.25f;
+float swing_speed  = 1.0f;
 float spread_speed = 2.0f;
 float rays_spread1 = 1.75f;
 float rays_spread2 = 1.75f;
@@ -257,7 +258,7 @@ XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 stroke_color1       = sRGB({ 115.f, 115.f, 115.f, 1.0f });
 	XMFLOAT4 stroke_color2       = sRGB({ 165.f, 165.f, 165.f, 1.0f });
 	XMFLOAT4 background_color1   = sRGB({ 240.f, 240.f, 240.f, 1.0f });
-	XMFLOAT4 background_color2   = sRGB({  40.f,  40.f,  40.f, 1.0f });
+	XMFLOAT4 background_color2   = sRGB({  10.f,  10.f,  10.f, 1.0f });
 
 	XMFLOAT4 intersection_color1 = sRGB({   0.f,   0.f,   0.f, 0.1f });
 	XMFLOAT4 intersection_color2 = sRGB({  64.f, 215.f, 242.f, 0.5f });
@@ -1311,11 +1312,10 @@ void DrawPatch(LensShapes::Patch& patch, XMFLOAT4& color) {
 	//g_pImmediateContext->GSSetShader(nullptr, nullptr, 0);
 	//g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 	//g_pImmediateContext->DrawIndexed(t * t * 3 * 2, 0, 0);
-
 }
 
 void CycleBounces() {
-
+	//return;
 	ghost_bounce_1 = ghost_bounce_2 + 1 + (int)time;
 
 	if (ghost_bounce_1 == 15) timer_start -= TimeToTick(1);
@@ -1346,18 +1346,18 @@ float AnimateRayDirection() {
 
 float AnimateSpread() {
 	float anim_rays_spread = (cos(time * spread_speed * PI) + 1.f) * 0.5f;
-	intersection_color1.w = lerp(0.05f, 0.01f, anim_rays_spread);
-	intersection_color2.w = lerp(0.30f, 0.01f, anim_rays_spread);
-	intersection_color3.w = lerp(0.30f, 0.01f, anim_rays_spread);
+	intersection_color1.w = 0.1;//lerp(0.05f, 0.01f, anim_rays_spread);
+	intersection_color2.w = 0.5;//lerp(0.30f, 0.01f, anim_rays_spread);
+	intersection_color3.w = 0.5;//lerp(0.30f, 0.01f, anim_rays_spread);
 	return lerp(rays_spread2, rays_spread1, anim_rays_spread);
 }
 
 void Tick() {
-	//time += speed * 0.01f;
-	time = (GetTickCount64() - timer_start) / 1000.0f * speed;
+	time += speed * 0.01f;
+	//time = (GetTickCount64() - timer_start) / 1000.0f * speed;
 
-	GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2 };
-	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
+	//GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2 };
+	//g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1367,14 +1367,60 @@ void Render() {
 	Tick();
 	CycleBounces();
 
-	#if defined(DRAW3D)
+	#if defined(DRAWLENSFLARE)
 		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
 		g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
-	
 		g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-		g_pImmediateContext->GSSetShader(g_pGeometryShader, nullptr, 0);
+
+		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+		g_pImmediateContext->GSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->GSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+
+		g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
+		g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
+
+		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vertices, &stride, &offset);
+		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+
+		int t = patch_tessellation - 1;
+		int i = t * t * 3 * 2;
 		
+		int g1 = 2;
+		int g2 = 1;
+		while (true) {
+
+			if (g1 == 15) g1++;
+			if (g2 == 15) g2++;
+
+			if (g1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+				g2++;
+				g1 = g2 + 1;
+			}
+
+			if (g2 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+				break;
+			}
+
+			GlobalUniforms cb = { time, (float)g1 , (float)g2 };
+			g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
+			g_pImmediateContext->DrawIndexed(i, 0, 0);
+
+			g1++;
+		}
+	#elif defined(DRAW3D)
+		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
+		g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+		g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
+		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
+		//g_pImmediateContext->GSSetShader(g_pGeometryShader, nullptr, 0);
+
 		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 		g_pImmediateContext->GSSetConstantBuffers(0, 1, &g_InstanceUniforms);
@@ -1392,8 +1438,8 @@ void Render() {
 		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 
-		float anim_ray_direction = AnimateRayDirection();
-		float rays_spread = AnimateSpread();
+		float anim_ray_direction = 0.f;//AnimateRayDirection();
+		float rays_spread = 1.f;//AnimateSpread();
 		AnimateFocusGroup();
 
 		// Trace all rays
@@ -1401,11 +1447,18 @@ void Render() {
 		std::vector<std::vector<vec3>> intersections2(num_of_rays);
 		std::vector<std::vector<vec3>> intersections3(num_of_rays);
 		for (int i = 0; i < num_of_rays; ++i) {
-			float pos = lerp(-1.f, 1.f, (float)i / (float)num_of_rays) * rays_spread;
-			vec3 a = vec3(0.0f, pos, total_lens_distance);
-			vec3 b = vec3(0.0f, pos + anim_ray_direction, total_lens_distance + 10.f);
-			vec3 c = normalize(a - b);
-			Ray r = { a - c * 20.f, c };
+			float pos = lerp(-1.f, 1.f, (float)i / (float)(num_of_rays - 1)) * rays_spread;
+
+			vec3 a1 = vec3(0.0f, pos, 400.f);
+			vec3 d1 = vec3(0.0f, 0.0f, -1.f);
+			Ray r1 = { a1, d1 };
+			Intersection i1 = testSPHERE(r1, nikon_28_75mm_lens_interface[0]);
+
+			vec3 d2 = normalize(vec3(0.0f, anim_ray_direction, -1.f));
+			vec3 a2 = i1.pos - d2 * 5.f;
+
+			Ray r = { a2, d2 };
+			
 			Trace(r, 1.f, nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 		}
 

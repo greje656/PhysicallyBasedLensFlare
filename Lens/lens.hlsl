@@ -235,8 +235,8 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 			float _lambda = 5.4e-7;
 			float _n1 = max(sqrt(n0*n2) , 1.38) ; // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
 			float _Fd1 = _lambda / 4.f / _n1;
-			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2) * 0.1;
-			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			float R = 0.1f;//FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -250,18 +250,33 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 //--------------------------------------------------------------------------------------
 PS_INPUT VS( float4 Pos : POSITION ) {
 	PS_INPUT res;
-	res.Position = Pos;
-	res.Mask = Pos;
+
+	float spread = 0.1f;
+	float3 a1 = float3((Pos.xy) * spread, 400.f);
+	float3 d1 = float3(0, 0, -1.f);
 	
+	Ray r1;
+	r1.pos = a1;
+	r1.dir = d1;
+	Intersection i1 = testSPHERE(r1, interfaces[0]);
+
+	float s = 0.05;
+	float sx = sin(time * s) * 0.01;
+	float sy = sin(time * s * 2) * 0.01;
+	float3 d2 = normalize(float3(sx, sy, -1.0f));
+	float3 a2 = i1.pos - d2 * 1.f;
+
 	Ray r;
-	r.tex = float4(0,0,0,1);
-	r.pos = float3(Pos.xy * 1.f, 300.f);
-	r.dir = normalize(float3(0.f, 0.F, -1.f));
+	r.tex = float4(0,0,0,0.5);
+	r.pos = a2;
+	r.dir = d2;
 
 	Ray g = Trace(r, 1.f, int2(g1, g2));
 
-	res.Position.xyz = float3(g.pos.xy * 0.0009f *10.f, 0.f);
+	res.Position.xyz = float3(g.pos.xy * 0.5 * 1.f/10.f, 0.f);
 	res.Position.x *= 0.5f;
+	res.Position.w = 0.5;
+	res.Mask = Pos;
 
 	res.Texture = g.tex;
 
@@ -291,7 +306,7 @@ float4 PS( in PS_INPUT In ) : SV_Target {
 	float light_intensity = length(In.Mask.xy) < 1.0f ? 1.f : 0.f;
 	float4 color = In.Texture;
 	float alpha = color.a * (color.z <= 1.f);
-	float v = 100.f;//saturate(color.z);
-    return float4(v,v,v, alpha * light_intensity * 10);
+	float v = 1.f;//saturate(color.z);
+    return float4(v,v,v, alpha * light_intensity);
 
 }
