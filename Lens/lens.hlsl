@@ -112,6 +112,7 @@ Intersection testSPHERE(Ray r, LensInterface F) {
 }
 
 float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float n2) {
+
 	float theta1 = asin(sin(theta0) * n0 / n1);
 	float theta2 = asin(sin(theta0) * n0 / n2);
 
@@ -133,6 +134,16 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 	float out_s2 = rs01*rs01 + ris*ris + 2.f * rs01*ris*cos(relPhase);
 	float out_p2 = rp01*rp01 + rip*rip + 2.f * rp01*rip*cos(relPhase);
 	
+	if(isnan(out_s2))
+		out_s2 = 1.f;
+
+	if(isnan(out_p2))
+		out_p2 = 1.f;
+
+
+	out_s2 = saturate(out_s2);
+	out_p2 = saturate(out_p2);
+
 	return (out_s2 + out_p2) / 2.f; 
 }
 
@@ -224,6 +235,10 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		float n1 = F.n.y;
 		float n2 = r.dir.z < 0.f ? F.n.z : F.n.x;
 
+		//float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
+		//float n1 = F.n.y;
+		//float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
+
 		if (!bReflect) // refraction
 		{
 			r.dir = refract(r.dir,i.norm,n0/n2);
@@ -232,11 +247,14 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		else // reflection with AR Coating
 		{
 			r.dir = reflect(r.dir,i.norm);
-			float _lambda = 5.4e-7;
-			float _n1 = max(sqrt(n0*n2) , 1.38) ; // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
-			float _Fd1 = _lambda / 4.f / _n1;
+
+			float _lambda = 5.0e-7;
+			float _n1 = max(sqrt(n0*n2), 1 + n2 * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
+			float _Fd1 = _lambda / 4.f * 2;
+
 			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
-			float R = 0.1f;//FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -251,7 +269,7 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 PS_INPUT VS( float4 Pos : POSITION ) {
 	PS_INPUT res;
 
-	float spread = 0.1f;
+	float spread = 1.0f;
 	float3 a1 = float3((Pos.xy) * spread, 400.f);
 	float3 d1 = float3(0, 0, -1.f);
 	
@@ -261,19 +279,21 @@ PS_INPUT VS( float4 Pos : POSITION ) {
 	Intersection i1 = testSPHERE(r1, interfaces[0]);
 
 	float s = 0.05;
-	float sx = sin(time * s) * 0.01;
-	float sy = sin(time * s * 2) * 0.01;
+	float a = 0.1;
+	float t = time;
+	float sx = sin(t * s) * a;
+	float sy = cos(t * s * 0.3 + 1.2) * a * 0.5;
 	float3 d2 = normalize(float3(sx, sy, -1.0f));
-	float3 a2 = i1.pos - d2 * 1.f;
+	float3 a2 = i1.pos - d2;
 
 	Ray r;
-	r.tex = float4(0,0,0,0.5);
+	r.tex = float4(0,0,0,1);
 	r.pos = a2;
 	r.dir = d2;
 
 	Ray g = Trace(r, 1.f, int2(g1, g2));
 
-	res.Position.xyz = float3(g.pos.xy * 0.5 * 1.f/10.f, 0.f);
+	res.Position.xyz = float3(g.pos.xy * 0.5 * 1.f/20.f, 0.f);
 	res.Position.x *= 0.5f;
 	res.Position.w = 0.5;
 	res.Mask = Pos;
@@ -303,10 +323,19 @@ void GS(triangle PS_INPUT input[3], inout TriangleStream<PS_INPUT> outputStream)
 //--------------------------------------------------------------------------------------
 float4 PS( in PS_INPUT In ) : SV_Target {
 
-	float light_intensity = length(In.Mask.xy) < 1.0f ? 1.f : 0.f;
 	float4 color = In.Texture;
+	float light_intensity0 = 1.f - pow(length(In.Mask.xy), 10);
+	float light_intensity1 = lerp(light_intensity0 * 0.5, light_intensity0, pow(length(In.Mask.xy),5));
+	float light_intensity2 = length(color.xy) < 0.5f ? 1.f : 0.f;
 	float alpha = color.a * (color.z <= 1.f);
-	float v = 1.f;//saturate(color.z);
-    return float4(v,v,v, alpha * light_intensity);
+	float masking = 1 - saturate(color.z);
+
+	//float3 flare_color1 = lerp(float3(1,0,0), float3(0,0,1), (1.f - interfaces[g1].n.z * 0.5));
+	//float3 flare_color2 = lerp(float3(1,0,0), float3(0,0,1), (1.f - interfaces[g2].n.z * 0.5));
+	//float3 flare_color = (flare_color1 + flare_color2) * 0.5;
+
+	float3 flare_color = float3(interfaces[g2].n.x * 1.5, interfaces[g1].n.z *1.1, interfaces[g2].n.z * 1.5) * 0.5;
+
+    return float4(flare_color, saturate(alpha * light_intensity1 * light_intensity2 * masking));
 
 }
