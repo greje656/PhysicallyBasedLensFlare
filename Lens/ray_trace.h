@@ -184,7 +184,10 @@ Ray Trace(
 		LensInterface F = INTERFACE[T];
 
 		bool bReflect = (T == STR[PHASE]) ? true : false;
-		if (bReflect) { DELTA = -DELTA; PHASE++; }
+		if (bReflect) {
+			DELTA = -DELTA;
+			PHASE++;
+		}
 		
 		Intersection i = F.flat ? testFLAT(r, F) : testSPHERE(r, F);
 		
@@ -201,7 +204,7 @@ Ray Trace(
 			intersections3.push_back(i.pos);
 		}
 
-		if (abs(i.pos.y) > F.h) break;
+		//if (abs(i.pos.y) > F.h) break;
 
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);

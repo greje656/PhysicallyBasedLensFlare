@@ -1,17 +1,12 @@
-cbuffer InstanceUniforms : register(b0) {
-	float4 color;
-	float4 placement;
-};
-
 cbuffer GlobalUniforms : register(b1) {
-	float time, g1, g2, c;
+	float time, g1, g2, spread;
 	float4 direction;
 };
 
 struct PS_INPUT {
-	float4 Position : SV_POSITION;
-	float4 Texture : TEXCOORD0;
-	float4 Mask : TEXCOORD1;
+	float4 position : SV_POSITION;
+	float4 color : TEXCOORD0;
+	float4 mask : TEXCOORD1;
 };
 
 struct LensInterface {
@@ -21,11 +16,11 @@ struct LensInterface {
 	float sa;
 	float d1;
 	bool flat;
-	float h;
 };
 
-struct Ray {
-	float3 pos, dir;
+struct Ray {	
+	float3 pos;
+	float3 dir;
 	float4 tex;
 };
 
@@ -37,47 +32,50 @@ struct Intersection {
 	bool inverted;
 };
 
+StructuredBuffer<PS_INPUT> Buffer0 : register(t0);
+RWStructuredBuffer<PS_INPUT> BufferA : register(u0);
+
+#define GLOBAL_SCALE 0.09f
+#define NUM_THREADS 4
+#define PATH_TESSELATION 32
 #define NUM_BOUNCE 2
 #define AP_IDX 14
 #define PI 3.14159265359f
-
 #define NUM_INTERFACE 29
+
 static LensInterface interfaces[NUM_INTERFACE] = {
 
-    { float3(0, 0, 130.812), 72.747, float3(1, 1, 1.603), 1, 1, false, 29 },
-    { float3(0, 0, 164.259), 37, float3(1.603, 1, 1), 1, 1, false, 29 },
-    { float3(0, 0, 361.068), -172.809, float3(1, 1, 1.58913), 1, 1, false, 26.2 },
-    { float3(0, 0, 146.265), 39.894, float3(1.58913, 1, 1), 1, 1, false, 26.2 },
-    { float3(0, 0, 135.339), 49.82, float3(1, 1, 1.86074), 1, 1, false, 20 },
-    { float3(0, 0, 106.009), 74.75, float3(1.86074, 1, 1), 1, 1, false, 20 },
-    { float3(0, 0, 64.215), 63.402, float3(1, 1, 1.86074), 1, 1, false, 16.1 },
-    { float3(0, 0, 88.487), 37.53, float3(1.86074, 1, 1.5168), 1, 1, false, 16.1 },
-    { float3(0, 0, 193.304), -75.887, float3(1.5168, 1, 1.80458), 1, 1, false, 16 },
-    { float3(0, 0, 213.609), -97.792, float3(1.80458, 1, 1), 1, 1, false, 16.5 },
-    { float3(0, 0, 12.72), 96.034, float3(1, 1, 1.62041), 1, 1, false, 18 },
-    { float3(0, 0, -156.589), 261.743, float3(1.62041, 1, 1), 1, 1, false, 18 },
-    { float3(0, 0, 50.792), 54.262, float3(1, 1, 1.6968), 1, 1, false, 18 },
-    { float3(0, 0, 6094.33), -5995.28, float3(1.6968, 1, 1), 1, 1, false, 18 },
-    { float3(0, 0, 97.522), 10, float3(1, 1, 1), 1, 1, true, 10 },
-    { float3(0, 0, 169.136), -74.414, float3(1, 1, 1.90265), 1, 1, false, 13 },
-    { float3(0, 0, 155.451), -62.929, float3(1.90265, 1, 1.5168), 1, 1, false, 13 },
-    { float3(0, 0, -30.308), 121.38, float3(1.5168, 1, 1), 1, 1, false, 13.1 },
-    { float3(0, 0, 174.295), -85.723, float3(1, 1, 1.49782), 1, 1, false, 13 },
-    { float3(0, 0, 56.079), 31.093, float3(1.49782, 1, 1.80458), 1, 1, false, 13.1 },
-    { float3(0, 0, -0.186005), 84.758, float3(1.80458, 1, 1), 1, 1, false, 13 },
-    { float3(0, 0, -392.007), 459.69, float3(1, 1, 1.86074), 1, 1, false, 15 },
-    { float3(0, 0, 26.043), 40.24, float3(1.86074, 1, 1.49782), 1, 1, false, 15 },
-    { float3(0, 0, 108.754), -49.771, float3(1.49782, 1, 1), 1, 1, false, 15.2 },
-    { float3(0, 0, -3.486), 62.369, float3(1, 1, 1.67025), 1, 1, false, 16 },
-    { float3(0, 0, 128.337), -76.454, float3(1.67025, 1, 1), 1, 1, false, 16 },
-    { float3(0, 0, 79.207), -32.524, float3(1, 1, 1.80454), 1, 1, false, 17 },
-    { float3(0, 0, 94.877), -50.194, float3(1.80454, 1, 1), 1, 1, false, 17 },
-    { float3(0, 0, 5), 0, float3(1, 1, 1), 1, 1, true, 0 },
+    { float3(0, 0, 130.812), 72.747, float3(1, 1, 1.603), 29, 1.38, false },
+    { float3(0, 0, 164.259), 37, float3(1.603, 1, 1), 29, 1.38, false },
+    { float3(0, 0, 361.068), -172.809, float3(1, 1, 1.58913), 26.2, 1.38, false },
+    { float3(0, 0, 146.265), 39.894, float3(1.58913, 1, 1), 26.2, 1.38, false },
+    { float3(0, 0, 135.339), 49.82, float3(1, 1, 1.86074), 20, 1.38, false },
+    { float3(0, 0, 106.009), 74.75, float3(1.86074, 1, 1), 20, 1.38, false },
+    { float3(0, 0, 64.215), 63.402, float3(1, 1, 1.86074), 16.1, 1.38, false },
+    { float3(0, 0, 88.487), 37.53, float3(1.86074, 1, 1.5168), 16.1, 1.38, false },
+    { float3(0, 0, 193.304), -75.887, float3(1.5168, 1, 1.80458), 16, 1.38, false },
+    { float3(0, 0, 213.609), -97.792, float3(1.80458, 1, 1), 16.5, 1.38, false },
+    { float3(0, 0, 12.72), 96.034, float3(1, 1, 1.62041), 18, 1.38, false },
+    { float3(0, 0, -156.589), 261.743, float3(1.62041, 1, 1), 18, 1.38, false },
+    { float3(0, 0, 50.792), 54.262, float3(1, 1, 1.6968), 18, 1.38, false },
+    { float3(0, 0, 6094.33), -5995.28, float3(1.6968, 1, 1), 18, 1.38, false },
+    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 10, 1.38, true },
+    { float3(0, 0, 169.136), -74.414, float3(1, 1, 1.90265), 13, 1.38, false },
+    { float3(0, 0, 155.451), -62.929, float3(1.90265, 1, 1.5168), 13, 1.38, false },
+    { float3(0, 0, -30.308), 121.38, float3(1.5168, 1, 1), 13.1, 1.38, false },
+    { float3(0, 0, 174.295), -85.723, float3(1, 1, 1.49782), 13, 1.38, false },
+    { float3(0, 0, 56.079), 31.093, float3(1.49782, 1, 1.80458), 13.1, 1.38, false },
+    { float3(0, 0, -0.186005), 84.758, float3(1.80458, 1, 1), 13, 1.38, false },
+    { float3(0, 0, -392.007), 459.69, float3(1, 1, 1.86074), 15, 1.38, false },
+    { float3(0, 0, 26.043), 40.24, float3(1.86074, 1, 1.49782), 15, 1.38, false },
+    { float3(0, 0, 108.754), -49.771, float3(1.49782, 1, 1), 15.2, 1.38, false },
+    { float3(0, 0, -3.486), 62.369, float3(1, 1, 1.67025), 16, 1.38, false },
+    { float3(0, 0, 128.337), -76.454, float3(1.67025, 1, 1), 16, 1.38, false },
+    { float3(0, 0, 79.207), -32.524, float3(1, 1, 1.80454), 17, 1.38, false },
+    { float3(0, 0, 94.877), -50.194, float3(1.80454, 1, 1), 17, 1.38, false },
+    { float3(0, 0, 5), 0, float3(1, 1, 1), 0, 1.38, true },
 
 };
-
-int2 BOUNCE[NUM_BOUNCE];
-int LENGTH[NUM_BOUNCE];
 
 Intersection testFLAT(Ray r, LensInterface F) {
 	Intersection i;
@@ -217,9 +215,9 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		// record texture coord . or max. rel . radius
 		[branch]
 		if (!F.flat)
-			r.tex.z = max(r.tex.z, length(i.pos.xy) / F.h);
+			r.tex.z = max(r.tex.z, length(i.pos.xy) / F.sa);
 		else if(T==AP_IDX) // iris aperture plane
-			r.tex.xy = i.pos.xy/interfaces[AP_IDX].radius; // update ray direction and position
+			r.tex.xy = i.pos.xy/interfaces[AP_IDX].sa; // update ray direction and position
 
 		r.dir = normalize(i.pos- r.pos);
 
@@ -259,83 +257,76 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		}
 	}
 
-	if (k<LEN) r.tex.a=0; // early−exit rays = invalid
+	if (k<LEN) r.tex.a = 0; // early−exit rays = invalid
+	
 	return r;
 }
 
-//--------------------------------------------------------------------------------------
-// Flare Vertex Shader
-//--------------------------------------------------------------------------------------
-PS_INPUT VS( float4 Pos : POSITION ) {
-	PS_INPUT res;
+uint pos_to_offset(int2 pos) {
+	return pos.x + pos.y * PATH_TESSELATION;
+}
 
-	float spread = 1.0f;
-	float3 a1 = float3((Pos.xy) * spread, 400.f);
+uint pos_to_offset_clamped(int2 pos) {
+	int x = clamp(pos.x, 0, PATH_TESSELATION);
+	int y = clamp(pos.y, 0, PATH_TESSELATION);
+	return x + y * PATH_TESSELATION;
+}
+
+float get_area(int2 pos) {
+	int c1 = pos_to_offset_clamped(pos + int2(-1, 1));
+	int c2 = pos_to_offset_clamped(pos + int2( 1, 1));
+	int c3 = pos_to_offset_clamped(pos + int2(-1,-1));
+	int c4 = pos_to_offset_clamped(pos + int2( 1,-1));
+
+	return BufferA[c1].position.x;
+}
+
+// Compute
+// ----------------------------------------------------------------------------------
+[numthreads(NUM_THREADS, NUM_THREADS, 1)]
+void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
+
+	int2 pos = gid * NUM_THREADS + gtid;
+	float2 uv = pos / float(PATH_TESSELATION - 1);
+	float2 ndc = (uv - 0.5f) * 2.f;
+
+	float3 a1 = float3(ndc * spread, 400.f);
 	float3 d1 = float3(0, 0, -1.f);
 	
-	Ray r1;
-	r1.pos = a1;
-	r1.dir = d1;
+	Ray r1 = { a1, d1, float4(0,0,0,0) };
 	Intersection i1 = testSPHERE(r1, interfaces[0]);
+	float3 a2 = i1.pos - d1;
 
-	float s = 0.05;
-	float a = 0.1;
-	float t = time;
-	float sx = sin(t * s) * a;
-	float sy = cos(t * s * 0.3 + 1.2) * a * 0.5;
-	float3 d2 = normalize(float3(sx, sy, -1.0f));
-	float3 a2 = i1.pos - d2;
-
-	Ray r;
-	r.tex = float4(0,0,0,1);
-	r.pos = a2;
-	r.dir = d2;
-
+	Ray r = { a2, d1, float4(0,0,0,1) };
 	Ray g = Trace(r, 1.f, int2(g1, g2));
 
-	res.Position.xyz = float3(g.pos.xy * 0.5 * 1.f/20.f, 0.f);
-	res.Position.x *= 0.5f;
-	res.Position.w = 0.5;
-	res.Mask = Pos;
+	PS_INPUT result;
+	result.position = float4(g.pos.xy * GLOBAL_SCALE, 0.f, 1.f);
+	result.position.y *= 2.f;
+	result.mask = float4(ndc, 0, 0);
+	result.color = g.tex;
 
-	res.Texture = g.tex;
 
-	return res;
+	uint offset = pos_to_offset(pos);
+	BufferA[offset] = result;
+
+	GroupMemoryBarrierWithGroupSync();
+
+	//float area = get_area(pos);
+	//BufferA[offset].Texture.b += area;
 }
 
-[maxvertexcount(3)]
-void GS(triangle PS_INPUT input[3], inout TriangleStream<PS_INPUT> outputStream)
-{
-
-	PS_INPUT p0 = input[0];
-	PS_INPUT p1 = input[1];
-	PS_INPUT p2 = input[2];
-
-	outputStream.Append(p0);
-	outputStream.Append(p1);
-	outputStream.Append(p2);
-
-	outputStream.RestartStrip();
+// Vertex Shader
+// ----------------------------------------------------------------------------------
+PS_INPUT VS( float4 Pos : POSITION, uint id : SV_VertexID ) {
+	return Buffer0[id];
 }
 
-//--------------------------------------------------------------------------------------
-// Flare Pixel Shader
-//--------------------------------------------------------------------------------------
-float4 PS( in PS_INPUT In ) : SV_Target {
-
-	float4 color = In.Texture;
-	float light_intensity0 = 1.f - pow(length(In.Mask.xy), 10);
-	float light_intensity1 = lerp(light_intensity0 * 0.5, light_intensity0, pow(length(In.Mask.xy),5));
-	float light_intensity2 = length(color.xy) < 0.5f ? 1.f : 0.f;
-	float alpha = color.a * (color.z <= 1.f);
-	float masking = 1 - saturate(color.z);
-
-	//float3 flare_color1 = lerp(float3(1,0,0), float3(0,0,1), (1.f - interfaces[g1].n.z * 0.5));
-	//float3 flare_color2 = lerp(float3(1,0,0), float3(0,0,1), (1.f - interfaces[g2].n.z * 0.5));
-	//float3 flare_color = (flare_color1 + flare_color2) * 0.5;
-
-	float3 flare_color = float3(interfaces[g2].n.x * 1.5, interfaces[g1].n.z *1.1, interfaces[g2].n.z * 1.5) * 0.5;
-
-    return float4(flare_color, saturate(alpha * light_intensity1 * light_intensity2 * masking));
+// Pixel Shader
+// ----------------------------------------------------------------------------------
+float4 PS( in PS_INPUT input ) : SV_Target {
+	float4 color = input.color;
+	float alpha = (color.z <= 1.f);
+    return float4(color.rgb, alpha);
 
 }
