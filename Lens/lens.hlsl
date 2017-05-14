@@ -33,11 +33,11 @@ struct Intersection {
 };
 
 StructuredBuffer<PS_INPUT> Buffer0 : register(t0);
-RWStructuredBuffer<PS_INPUT> BufferA : register(u0);
+RWStructuredBuffer<PS_INPUT> uav_buffer : register(u0);
 
 #define GLOBAL_SCALE 0.09f
-#define NUM_THREADS 4
-#define PATH_TESSELATION 32
+#define NUM_THREADS 32
+#define PATCH_TESSELATION 32
 #define NUM_BOUNCE 2
 #define AP_IDX 14
 #define PI 3.14159265359f
@@ -250,9 +250,9 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 			float _n1 = max(sqrt(n0*n2), 1 + n2 * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
 			float _Fd1 = _lambda / 4.f * 2;
 
+			float R = 0.5f;
 			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
-			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
-
+			//float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -263,22 +263,119 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 }
 
 uint pos_to_offset(int2 pos) {
-	return pos.x + pos.y * PATH_TESSELATION;
+	return pos.x + pos.y * PATCH_TESSELATION;
 }
 
 uint pos_to_offset_clamped(int2 pos) {
-	int x = clamp(pos.x, 0, PATH_TESSELATION);
-	int y = clamp(pos.y, 0, PATH_TESSELATION);
-	return x + y * PATH_TESSELATION;
+	int x = clamp(pos.x, 0, PATCH_TESSELATION - 1);
+	int y = clamp(pos.y, 0, PATCH_TESSELATION - 1);
+	return x + y * PATCH_TESSELATION;
 }
 
 float get_area(int2 pos) {
-	int c1 = pos_to_offset_clamped(pos + int2(-1, 1));
-	int c2 = pos_to_offset_clamped(pos + int2( 1, 1));
-	int c3 = pos_to_offset_clamped(pos + int2(-1,-1));
-	int c4 = pos_to_offset_clamped(pos + int2( 1,-1));
 
-	return BufferA[c1].position.x;
+	// a----b----c
+	// |  A |  B |
+	// d----e----f
+	// |  C |  D |
+	// g----h----i
+
+	int a = pos_to_offset_clamped(pos + int2(-1, 1));
+	int b = pos_to_offset_clamped(pos + int2( 0, 1));
+	int c = pos_to_offset_clamped(pos + int2( 1, 1));
+	int d = pos_to_offset_clamped(pos + int2(-1, 0));
+	int e = pos_to_offset_clamped(pos + int2( 0, 0));
+	int f = pos_to_offset_clamped(pos + int2( 1, 0));
+	int g = pos_to_offset_clamped(pos + int2(-1,-1));
+	int h = pos_to_offset_clamped(pos + int2( 0,-1));
+	int i = pos_to_offset_clamped(pos + int2( 1,-1));
+
+	float4 pa = uav_buffer[a].position;
+	float4 pb = uav_buffer[b].position;
+	float4 pc = uav_buffer[c].position;
+	float4 pd = uav_buffer[d].position;
+	float4 pe = uav_buffer[e].position;
+	float4 pf = uav_buffer[f].position;
+	float4 pg = uav_buffer[g].position;
+	float4 ph = uav_buffer[h].position;
+	float4 pi = uav_buffer[i].position;
+
+	float ab = length(pa.xy - pb.xy);
+	float bc = length(pb.xy - pc.xy);
+	float ad = length(pa.xy - pd.xy);
+	float be = length(pb.xy - pe.xy);
+	float cf = length(pc.xy - pf.xy);
+	float de = length(pd.xy - pe.xy);
+	float ef = length(pe.xy - pf.xy);
+	float dg = length(pd.xy - pg.xy);
+	float eh = length(pe.xy - ph.xy);
+	float fi = length(pf.xy - pi.xy);
+	float gh = length(pg.xy - ph.xy);
+	float hi = length(ph.xy - pi.xy);
+
+	bool left_edge   = (pos.x == 0);
+	bool right_edge  = (pos.x == (PATCH_TESSELATION - 1));
+	bool bottom_edge = (pos.y == 0);
+	bool top_edge    = (pos.y == (PATCH_TESSELATION - 1));
+
+	float A = lerp(ab, de, 0.5f) * lerp(ad, be, 0.5f) * (!left_edge  && !top_edge);
+	float B = lerp(bc, ef, 0.5f) * lerp(be, cf, 0.5f) * (!right_edge && !top_edge);
+	float C = lerp(de, gh, 0.5f) * lerp(dg, eh, 0.5f) * (!left_edge  && !bottom_edge);
+	float D = lerp(ef, hi, 0.5f) * lerp(eh, fi, 0.5f) * (!right_edge && !bottom_edge);
+
+	bool is_edge = (left_edge || right_edge) || (bottom_edge || top_edge);
+	bool is_corner = (left_edge || right_edge) && (bottom_edge || top_edge);
+	float no_area_contributors = is_corner ? 1.f : is_edge ? 2.f : 4.f;
+
+	float Oa = spread * ((PATCH_TESSELATION - 2.f) / (float)PATCH_TESSELATION);
+	float Na = (A + B + C + D) / no_area_contributors;
+
+	float energy = 0.001f;
+	
+	return 1.f;//(Oa/Na) * energy;
+
+}
+
+// Vertex Shader
+// ----------------------------------------------------------------------------------
+PS_INPUT VS( float4 pos : POSITION ) {
+
+	float2 ndc = pos.xy;
+	
+	float3 starting_pos = float3(ndc * spread, 400.f);
+	
+	float3 dir = normalize(float3(0, sin(time * 0.05), -10));
+	// Project all starting points in the entry lens
+	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
+	Intersection i = testSPHERE(c, interfaces[0]);
+	starting_pos = i.pos - dir.xyz;
+
+	Ray r = { starting_pos, dir.xyz, float4(0,0,0,1) };
+	Ray g = Trace(r, 1.f, int2(g1, g2));
+
+	PS_INPUT result;
+	result.position = float4(g.pos.xy, 0, 1.f);
+	result.mask = float4(ndc, 0, 1);
+	result.color = g.tex;
+
+	result.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
+	result.position.zw = float2(0.f, 1.f);
+
+	return result;
+}
+
+[maxvertexcount(3)]
+void GS(triangleadj PS_INPUT input[6], inout TriangleStream<PS_INPUT> outputStream, uint vPrim : SV_PrimitiveID) {
+
+	PS_INPUT p0 = input[0];
+	PS_INPUT p1 = input[2];
+	PS_INPUT p2 = input[4];
+	
+	outputStream.Append(p0);
+	outputStream.Append(p1);
+	outputStream.Append(p2);
+
+	outputStream.RestartStrip();
 }
 
 // Compute
@@ -287,46 +384,59 @@ float get_area(int2 pos) {
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 
 	int2 pos = gid * NUM_THREADS + gtid;
-	float2 uv = pos / float(PATH_TESSELATION - 1);
+	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
-	float3 a1 = float3(ndc * spread, 400.f);
-	float3 d1 = float3(0, 0, -1.f);
+	float3 starting_pos = float3(ndc * spread, 400.f);
 	
-	Ray r1 = { a1, d1, float4(0,0,0,0) };
-	Intersection i1 = testSPHERE(r1, interfaces[0]);
-	float3 a2 = i1.pos - d1;
+	float3 dir = normalize(float3(0, sin(time * 0.05), -10));
+	// Project all starting points in the entry lens
+	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
+	Intersection i = testSPHERE(c, interfaces[0]);
+	starting_pos = i.pos - dir.xyz;
 
-	Ray r = { a2, d1, float4(0,0,0,1) };
+	Ray r = { starting_pos, dir.xyz, float4(0,0,0,1) };
 	Ray g = Trace(r, 1.f, int2(g1, g2));
 
 	PS_INPUT result;
-	result.position = float4(g.pos.xy * GLOBAL_SCALE, 0.f, 1.f);
-	result.position.y *= 2.f;
+	result.position = float4(g.pos.xy, 0, 1.f);
 	result.mask = float4(ndc, 0, 0);
 	result.color = g.tex;
 
-
 	uint offset = pos_to_offset(pos);
-	BufferA[offset] = result;
+	uav_buffer[offset] = result;
 
 	GroupMemoryBarrierWithGroupSync();
 
-	//float area = get_area(pos);
-	//BufferA[offset].Texture.b += area;
+	uav_buffer[offset].mask.w = get_area(pos);
+
 }
 
 // Vertex Shader
 // ----------------------------------------------------------------------------------
-PS_INPUT VS( float4 Pos : POSITION, uint id : SV_VertexID ) {
-	return Buffer0[id];
+PS_INPUT VSC( uint id : SV_VertexID ) {
+	PS_INPUT vertex  = Buffer0[id];
+	
+	vertex.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
+	vertex.position.zw = float2(0.f, 1.f);
+	
+	return vertex;
 }
 
 // Pixel Shader
 // ----------------------------------------------------------------------------------
 float4 PS( in PS_INPUT input ) : SV_Target {
 	float4 color = input.color;
-	float alpha = (color.z <= 1.f);
-    return float4(color.rgb, alpha);
+	float4 mask = input.mask;
+	
+	float alpha1 = color.a;
+	float alpha2 = (color.z <= 1.f);
+	float alpha3 = (length(mask.xy) < 1.f);
+	
+	float alpha = alpha1 * alpha2 * alpha3;
+
+	float v = mask.w;
+
+    return float4(v, v, v, alpha);
 
 }
