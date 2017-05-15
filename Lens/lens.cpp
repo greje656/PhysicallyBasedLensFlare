@@ -11,13 +11,19 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//#define DRAW2D
-//#define DRAW3D
-#define DRAWLENSFLARE
+#define DRAW2D
+#define DRAW3D
+//#define DRAWLENSFLARE
 
 //#define USE_COMPUTE
 
 using namespace DirectX;
+
+#if defined(USE_COMPUTE)
+	#define INDICES_PER_PRIM 3
+#else
+	#define INDICES_PER_PRIM 6
+#endif
 
 //--------------------------------------------------------------------------------------
 // DEFAULT
@@ -184,7 +190,11 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 20.f,  0.0f },
 };
 
-int num_of_rays = 51;
+int patch_tesselation = 32;
+int num_threads = patch_tesselation;
+int num_groups = patch_tesselation / num_threads;
+
+int num_of_rays = patch_tesselation;
 int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
 
 int ghost_bounce_1 = 21;
@@ -205,18 +215,16 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
-float speed        = 0.0f;
+float speed        = 0.00f;
 float focus_speed  = 0.0f;
-float swing_angle  = 0.25f;
+float swing_angle  = 0.0f;
 float swing_speed  = 1.0f;
 float spread_speed = 0.01f;
 float rays_spread1 = 1.75f;
 float rays_spread2 = 1.75f;
-float rays_spread  = 0.25f;
+float rays_spread  = 1.75f;
 
-int patch_tesselation = 32;
-int num_threads = patch_tesselation;
-int num_groups = patch_tesselation / num_threads;
+vec3 direction( 0.f, 0.f,-1.f);
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
@@ -593,13 +601,29 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 			int i3 = i1 + subdiv;
 			int i4 = i2 + subdiv;
 
-			indices.push_back(i3);
-			indices.push_back(i1);
-			indices.push_back(i2);
+			#if defined(USE_COMPUTE)
+				indices.push_back(i3);
+				indices.push_back(i1);
+				indices.push_back(i2);
 
-			indices.push_back(i2);
-			indices.push_back(i4);
-			indices.push_back(i3);
+				indices.push_back(i2);
+				indices.push_back(i4);
+				indices.push_back(i3);
+			#else
+				indices.push_back(i3);
+				indices.push_back(i3);
+				indices.push_back(i1);
+				indices.push_back(i1);
+				indices.push_back(i2);
+				indices.push_back(i2);
+
+				indices.push_back(i2);
+				indices.push_back(i2);
+				indices.push_back(i4);
+				indices.push_back(i4);
+				indices.push_back(i3);
+				indices.push_back(i3);
+			#endif
 
 			current_corner++;
 		}
@@ -623,7 +647,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = 3 * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1));
+	bd.ByteWidth = INDICES_PER_PRIM * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1));
 	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
 	bd.CPUAccessFlags = 0;
 	ZeroMemory(&InitData, sizeof(InitData));
@@ -1362,36 +1386,8 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->Draw((int)intersections.size(), 0);
 }
 
-void DrawPatch(LensShapes::Patch& patch) {
-
-	int pt = patch_tesselation - 1;
-	ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
-	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
-
-	g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	g_pImmediateContext->IASetIndexBuffer(patch.indices, DXGI_FORMAT_R32_UINT, 0);
-
-	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
-	g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
-	g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
-	g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-	g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
-	g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-	g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-
-	// Compute
-	g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &patch.ua_vertices_resource_view, nullptr);
-	g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
-	g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
-	
-	// Draw
-	g_pImmediateContext->VSSetShaderResources(0, 1, &patch.vertices_resource_view);
-	g_pImmediateContext->DrawIndexed(pt * pt * 3 * 2, 0, 0);
-	g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
-}
-
 void CycleBounces() {
+	//return;
 	if (time > 1.f) {
 		ghost_bounce_1++;
 		time = 0.f;
@@ -1416,8 +1412,9 @@ void AnimateFocusGroup() {
 	}
 }
 
-float AnimateRayDirection() {
-	return sin(time * swing_speed * PI) * swing_angle;
+void AnimateRayDirection() {
+	float y = sin(time * swing_speed * PI) * swing_angle;
+	direction = vec3(0.f, y, -1.f);
 }
 
 void AnimateSpread() {
@@ -1432,7 +1429,7 @@ void Tick() {
 	time += speed;
 	//time = (GetTickCount64() - timer_start) / 1000.0f * speed;
 
-	GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread, XMFLOAT4(0, 0,-1, 0) };
+	GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread, XMFLOAT4(direction.x, direction.y, direction.z, 0) };
 	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
@@ -1443,6 +1440,7 @@ void Render() {
 	Tick();
 	CycleBounces();
 	AnimateSpread();
+	AnimateRayDirection();
 
 	#if defined(DRAW2D)
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
@@ -1478,12 +1476,9 @@ void Render() {
 			g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vs_vertices, &stride, &offset);
 		#endif
 		
-		static float my_time = 0.f;
-		my_time += 0.1;
-
 		int g1 = 2;
 		int g2 = 1;
-		int tt = 0;
+
 		while (true) {
 
 			if (g1 == 15) g1++;
@@ -1498,7 +1493,7 @@ void Render() {
 				break;
 			}
 
-			GlobalUniforms cb = { my_time, (float)g1 , (float)g2, rays_spread, XMFLOAT4(0, 0, -1, 0) };
+			GlobalUniforms cb = { time, (float)g1 , (float)g2, rays_spread, XMFLOAT4(direction.x, direction.y, direction.z, 0) };
 			g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 
 			#if defined(USE_COMPUTE)
@@ -1507,18 +1502,14 @@ void Render() {
 				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
 				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patches[g1].vertices_resource_view);
-				g_pImmediateContext->DrawIndexed(pt * pt * 3 * 2, 0, 0);
+				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
 				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
+			#else
+				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
 			#endif
 
-			g_pImmediateContext->DrawIndexed(pt * pt * 3 * 2, 0, 0);
 
 			g1++;
-
-			tt++;
-
-			if (tt > 10)
-				break;
 		}
 
 	#elif defined(DRAW3D)
@@ -1530,27 +1521,43 @@ void Render() {
 		ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
 		ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
-		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 
 		g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
 		g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
+
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-		g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
-		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-		g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 
-		// Compute
-		g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-		g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
-		g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
+		#if defined(USE_COMPUTE)
+			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		
+			g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
+			g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+			g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
+			g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 
-		// Draw
-		g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-		g_pImmediateContext->DrawIndexed(pt * pt * 3 * 2, 0, 0);
-		g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
+
+			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
+
+			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
+		#else
+			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ);
+
+			g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
+			g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+
+			g_pImmediateContext->GSSetShader(g_pFlareGeometryShader, nullptr, 0);
+			g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vs_vertices, &stride, &offset);
+			g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
+		#endif
 	#else
 		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
 		g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -1560,7 +1567,6 @@ void Render() {
 		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 
-		float anim_ray_direction = 0.f;//AnimateRayDirection();
 		AnimateFocusGroup();
 
 		// Trace all rays
@@ -1575,10 +1581,9 @@ void Render() {
 			Ray r1 = { a1, d1 };
 			Intersection i1 = testSPHERE(r1, nikon_28_75mm_lens_interface[0]);
 
-			vec3 d2 = normalize(vec3(0.0f, anim_ray_direction, -1.f));
-			vec3 a2 = i1.pos - d2 * 5.f;
+			vec3 a2 = i1.pos - direction;
 
-			Ray r = { a2, d2 };
+			Ray r = { a2, direction };
 			
 			Trace(r, 1.f, nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 		}

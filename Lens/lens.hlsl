@@ -330,10 +330,29 @@ float get_area(int2 pos) {
 	float Oa = spread * ((PATCH_TESSELATION - 2.f) / (float)PATCH_TESSELATION);
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 0.001f;
+	float energy = 0.1f;
 	
-	return 1.f;//(Oa/Na) * energy;
+	return (Oa/Na) * energy;
 
+}
+
+PS_INPUT getTraceResult(float2 ndc){
+	float3 starting_pos = float3(ndc * spread, 400.f);
+	
+	// Project all starting points in the entry lens
+	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
+	Intersection i = testSPHERE(c, interfaces[0]);
+	starting_pos = i.pos - direction.xyz;
+
+	Ray r = { starting_pos, direction.xyz, float4(0,0,0,1) };
+	Ray g = Trace(r, 1.f, int2(g1, g2));
+
+	PS_INPUT result;
+	result.position = float4(g.pos.xy, 0, 1.f);
+	result.mask = float4(ndc, 0, 1);
+	result.color = g.tex;
+
+	return result;
 }
 
 // Vertex Shader
@@ -342,23 +361,9 @@ PS_INPUT VS( float4 pos : POSITION ) {
 
 	float2 ndc = pos.xy;
 	
-	float3 starting_pos = float3(ndc * spread, 400.f);
-	
-	float3 dir = normalize(float3(0, sin(time * 0.05), -10));
-	// Project all starting points in the entry lens
-	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
-	Intersection i = testSPHERE(c, interfaces[0]);
-	starting_pos = i.pos - dir.xyz;
+	PS_INPUT result = getTraceResult(ndc);
 
-	Ray r = { starting_pos, dir.xyz, float4(0,0,0,1) };
-	Ray g = Trace(r, 1.f, int2(g1, g2));
-
-	PS_INPUT result;
-	result.position = float4(g.pos.xy, 0, 1.f);
-	result.mask = float4(ndc, 0, 1);
-	result.color = g.tex;
-
-	result.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
+	result.position.xy *= GLOBAL_SCALE * 0.75 * float2(1.f, 2.f);
 	result.position.zw = float2(0.f, 1.f);
 
 	return result;
@@ -387,22 +392,8 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
-	float3 starting_pos = float3(ndc * spread, 400.f);
+	PS_INPUT result = getTraceResult(ndc);
 	
-	float3 dir = normalize(float3(0, sin(time * 0.05), -10));
-	// Project all starting points in the entry lens
-	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
-	Intersection i = testSPHERE(c, interfaces[0]);
-	starting_pos = i.pos - dir.xyz;
-
-	Ray r = { starting_pos, dir.xyz, float4(0,0,0,1) };
-	Ray g = Trace(r, 1.f, int2(g1, g2));
-
-	PS_INPUT result;
-	result.position = float4(g.pos.xy, 0, 1.f);
-	result.mask = float4(ndc, 0, 0);
-	result.color = g.tex;
-
 	uint offset = pos_to_offset(pos);
 	uav_buffer[offset] = result;
 
@@ -417,7 +408,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 PS_INPUT VSC( uint id : SV_VertexID ) {
 	PS_INPUT vertex  = Buffer0[id];
 	
-	vertex.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
+	vertex.position.xy *= GLOBAL_SCALE * 0.75 * float2(1.f, 2.f);
 	vertex.position.zw = float2(0.f, 1.f);
 	
 	return vertex;
@@ -433,7 +424,7 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	float alpha2 = (color.z <= 1.f);
 	float alpha3 = (length(mask.xy) < 1.f);
 	
-	float alpha = alpha1 * alpha2 * alpha3;
+	float alpha = alpha1 * alpha2;
 
 	float v = mask.w;
 
