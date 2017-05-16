@@ -11,11 +11,11 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-#define DRAW3D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+//#define DRAW3D
+#define DRAWLENSFLARE
 
-//#define USE_COMPUTE
+#define USE_COMPUTE
 
 using namespace DirectX;
 
@@ -132,7 +132,6 @@ LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
 
-std::vector<LensShapes::Patch> unit_patches;
 std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
 const float d6  = 53.142f;
@@ -215,14 +214,14 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
-float speed        = 0.00f;
+float speed        = 0.002f;
 float focus_speed  = 0.0f;
-float swing_angle  = 0.0f;
+float swing_angle  = 0.2f;
 float swing_speed  = 1.0f;
 float spread_speed = 0.01f;
 float rays_spread1 = 1.75f;
 float rays_spread2 = 1.75f;
-float rays_spread  = 1.75f;
+float rays_spread  = 0.75f;
 
 vec3 direction( 0.f, 0.f,-1.f);
 
@@ -595,12 +594,10 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	int current_corner = 0;
 	for (int y = 0; y < (subdiv - 1); ++y) {
 		for (int x = 0; x < (subdiv - 1); ++x) {
-
 			int i1 = current_corner;
 			int i2 = i1 + 1;
 			int i3 = i1 + subdiv;
 			int i4 = i2 + subdiv;
-
 			#if defined(USE_COMPUTE)
 				indices.push_back(i3);
 				indices.push_back(i1);
@@ -610,19 +607,35 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 				indices.push_back(i4);
 				indices.push_back(i3);
 			#else
+				int a4 = i3 - 1;
+				int a5 = i2 - subdiv;
+				int a6 = i3 + 1;
+
+				if (a4 < 0) a4 = 0;
+				if (a5 < 0) a5 = 0;
+				if (a6 < 0) a6 = 0;
+
+				int b1 = i2 + 1;
+				int b2 = i3 + subdiv;
+				int b3 = i1;
+
+				if (b1 < 0) b1 = 0;
+				if (b2 < 0) b2 = 0;
+				if (b3 < 0) b3 = 0;
+
 				indices.push_back(i3);
-				indices.push_back(i3);
+				indices.push_back(a4);
 				indices.push_back(i1);
-				indices.push_back(i1);
+				indices.push_back(a5);
 				indices.push_back(i2);
-				indices.push_back(i2);
+				indices.push_back(a6);
 
 				indices.push_back(i2);
-				indices.push_back(i2);
+				indices.push_back(b1);
 				indices.push_back(i4);
-				indices.push_back(i4);
+				indices.push_back(b2);
 				indices.push_back(i3);
-				indices.push_back(i3);
+				indices.push_back(b3);
 			#endif
 
 			current_corner++;
@@ -1052,11 +1065,6 @@ HRESULT InitDevice()
 	unit_square = CreateUnitRectangle();
 	unit_patch = CreateUnitPatch(patch_tesselation);
 
-	int num_of_ghosts = 13;
-	unit_patches.resize(num_of_ghosts);
-	for (int i = 0; i < num_of_ghosts; ++i)
-		unit_patches[i] = CreateUnitPatch(patch_tesselation);
-	
 	ParseLensComponents();
 
 	return S_OK;
@@ -1497,17 +1505,16 @@ void Render() {
 			g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 
 			#if defined(USE_COMPUTE)
-				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patches[g1].ua_vertices_resource_view, nullptr);
+				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
 				g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
 				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
-				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patches[g1].vertices_resource_view);
+				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
 				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 			#else
 				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
 			#endif
-
 
 			g1++;
 		}

@@ -250,7 +250,7 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 			float _n1 = max(sqrt(n0*n2), 1 + n2 * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
 			float _Fd1 = _lambda / 4.f * 2;
 
-			float R = 0.5f;
+			float R = 0.1f;
 			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			//float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			r.tex.a *= R; // update ray intensity
@@ -330,7 +330,7 @@ float get_area(int2 pos) {
 	float Oa = spread * ((PATCH_TESSELATION - 2.f) / (float)PATCH_TESSELATION);
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 0.1f;
+	float energy = 1.f;
 	
 	return (Oa/Na) * energy;
 
@@ -375,7 +375,7 @@ void GS(triangleadj PS_INPUT input[6], inout TriangleStream<PS_INPUT> outputStre
 	PS_INPUT p0 = input[0];
 	PS_INPUT p1 = input[2];
 	PS_INPUT p2 = input[4];
-	
+
 	outputStream.Append(p0);
 	outputStream.Append(p1);
 	outputStream.Append(p2);
@@ -387,7 +387,6 @@ void GS(triangleadj PS_INPUT input[6], inout TriangleStream<PS_INPUT> outputStre
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
-
 	int2 pos = gid * NUM_THREADS + gtid;
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
@@ -398,6 +397,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 	uav_buffer[offset] = result;
 
 	GroupMemoryBarrierWithGroupSync();
+	AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].mask.w = get_area(pos);
 
@@ -424,7 +424,7 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	float alpha2 = (color.z <= 1.f);
 	float alpha3 = (length(mask.xy) < 1.f);
 	
-	float alpha = alpha1 * alpha2;
+	float alpha = alpha1 * alpha2 * alpha3;
 
 	float v = mask.w;
 
