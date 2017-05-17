@@ -59,7 +59,7 @@ static LensInterface interfaces[NUM_INTERFACE] = {
     { float3(0, 0, -156.589), 261.743, float3(1.62041, 1, 1), 18, 1.38, false },
     { float3(0, 0, 50.792), 54.262, float3(1, 1, 1.6968), 18, 1.38, false },
     { float3(0, 0, 6094.33), -5995.28, float3(1.6968, 1, 1), 18, 1.38, false },
-    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 10, 1.38, true },
+    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 5, 1.38, true },
     { float3(0, 0, 169.136), -74.414, float3(1, 1, 1.90265), 13, 1.38, false },
     { float3(0, 0, 155.451), -62.929, float3(1.90265, 1, 1.5168), 13, 1.38, false },
     { float3(0, 0, -30.308), 121.38, float3(1.5168, 1, 1), 13.1, 1.38, false },
@@ -330,7 +330,7 @@ float get_area(int2 pos) {
 	float Oa = spread * ((PATCH_TESSELATION - 2.f) / (float)PATCH_TESSELATION);
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 1.f;
+	float energy = 0.5f;
 	
 	return (Oa/Na) * energy;
 
@@ -363,7 +363,7 @@ PS_INPUT VS( float4 pos : POSITION ) {
 	
 	PS_INPUT result = getTraceResult(ndc);
 
-	result.position.xy *= GLOBAL_SCALE * 0.75 * float2(1.f, 2.f);
+	result.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
 	result.position.zw = float2(0.f, 1.f);
 
 	return result;
@@ -396,7 +396,6 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 	uint offset = pos_to_offset(pos);
 	uav_buffer[offset] = result;
 
-	GroupMemoryBarrierWithGroupSync();
 	AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].mask.w = get_area(pos);
@@ -408,7 +407,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 PS_INPUT VSC( uint id : SV_VertexID ) {
 	PS_INPUT vertex  = Buffer0[id];
 	
-	vertex.position.xy *= GLOBAL_SCALE * 0.75 * float2(1.f, 2.f);
+	vertex.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
 	vertex.position.zw = float2(0.f, 1.f);
 	
 	return vertex;
@@ -423,11 +422,11 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	float alpha1 = color.a;
 	float alpha2 = (color.z <= 1.f);
 	float alpha3 = (length(mask.xy) < 1.f);
-	
-	float alpha = alpha1 * alpha2 * alpha3;
+	float alpha4 = (length(color.xy) < 1.f);
+
+	float alpha = alpha1 * alpha2 * alpha3 * alpha4;
 
 	float v = mask.w;
-
     return float4(v, v, v, alpha);
 
 }
