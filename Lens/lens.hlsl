@@ -35,7 +35,7 @@ struct Intersection {
 StructuredBuffer<PS_INPUT> Buffer0 : register(t0);
 RWStructuredBuffer<PS_INPUT> uav_buffer : register(u0);
 
-#define GLOBAL_SCALE 0.09f
+#define GLOBAL_SCALE 1.f
 #define NUM_THREADS 32
 #define PATCH_TESSELATION 32
 #define NUM_BOUNCE 2
@@ -73,7 +73,7 @@ static LensInterface interfaces[NUM_INTERFACE] = {
     { float3(0, 0, 128.337), -76.454, float3(1.67025, 1, 1), 16, 1.38, false },
     { float3(0, 0, 79.207), -32.524, float3(1, 1, 1.80454), 17, 1.38, false },
     { float3(0, 0, 94.877), -50.194, float3(1.80454, 1, 1), 17, 1.38, false },
-    { float3(0, 0, 5), 0, float3(1, 1, 1), 0, 1.38, true },
+    { float3(0, 0, 5), 0, float3(1, 1, 1), 20, 1.38, true },
 
 };
 
@@ -229,9 +229,9 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		if (F.flat) continue;
 
 		// do reflection / refraction for spher . surfaces
-		float n0 = r.dir.z < 0.f ? F.n.x : F.n.z;
+		float n0 = r.dir.z > 0.f ? F.n.x : F.n.z;
 		float n1 = F.n.y;
-		float n2 = r.dir.z < 0.f ? F.n.z : F.n.x;
+		float n2 = r.dir.z > 0.f ? F.n.z : F.n.x;
 
 		//float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
 		//float n1 = F.n.y;
@@ -246,13 +246,13 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		{
 			r.dir = reflect(r.dir,i.norm);
 
-			float _lambda = 5.0e-7;
-			float _n1 = max(sqrt(n0*n2), 1 + n2 * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
-			float _Fd1 = _lambda / 4.f * 2;
+			float _lambda = 5.0e-4;
+			float _n1 = max(sqrt(n0*n2), 1.38f * 10); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
+			float _Fd1 = _lambda / 4.f / _n1;
 
-			float R = 0.1f;
+			//float R = 0.2f;
 			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
-			//float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -327,10 +327,11 @@ float get_area(int2 pos) {
 	bool is_corner = (left_edge || right_edge) && (bottom_edge || top_edge);
 	float no_area_contributors = is_corner ? 1.f : is_edge ? 2.f : 4.f;
 
-	float Oa = spread * ((PATCH_TESSELATION - 2.f) / (float)PATCH_TESSELATION);
+	float unit_patch_length = spread / (float)PATCH_TESSELATION;
+	float Oa = unit_patch_length * unit_patch_length * no_area_contributors;
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 0.5f;
+	float energy = 5.f;
 	
 	return (Oa/Na) * energy;
 
@@ -348,7 +349,7 @@ PS_INPUT getTraceResult(float2 ndc){
 	Ray g = Trace(r, 1.f, int2(g1, g2));
 
 	PS_INPUT result;
-	result.position = float4(g.pos.xy, 0, 1.f);
+	result.position = float4(g.pos.xyz, 1.f);
 	result.mask = float4(ndc, 0, 1);
 	result.color = g.tex;
 
@@ -363,7 +364,8 @@ PS_INPUT VS( float4 pos : POSITION ) {
 	
 	PS_INPUT result = getTraceResult(ndc);
 
-	result.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
+	float scale = 1.f/(interfaces[NUM_INTERFACE-1].sa);
+	result.position.xy *= scale * GLOBAL_SCALE * float2(1.f, 2.f);
 	result.position.zw = float2(0.f, 1.f);
 
 	return result;
@@ -407,8 +409,9 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
 PS_INPUT VSC( uint id : SV_VertexID ) {
 	PS_INPUT vertex  = Buffer0[id];
 	
-	vertex.position.xy *= GLOBAL_SCALE * float2(1.f, 2.f);
-	vertex.position.zw = float2(0.f, 1.f);
+	float scale = 1.f/(interfaces[NUM_INTERFACE-1].sa);
+	vertex.position.xy *= scale * GLOBAL_SCALE * float2(1.f, 2.f);
+	vertex.position.w = 1;
 	
 	return vertex;
 }
@@ -419,14 +422,16 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	float4 color = input.color;
 	float4 mask = input.mask;
 	
+	float i = 1 - saturate((length(mask.xy) - 0.95)/0.05);
+
 	float alpha1 = color.a;
 	float alpha2 = (color.z <= 1.f);
-	float alpha3 = (length(mask.xy) < 1.f);
-	float alpha4 = (length(color.xy) < 1.f);
+	float alpha3 = length(mask.xy) < 1.0f;
+	float alpha4 = length(color.xy) < 0.5f;
+	float alpha5 = i * saturate(mask.w);
 
-	float alpha = alpha1 * alpha2 * alpha3 * alpha4;
-
-	float v = mask.w;
+	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
+	float v = i;
     return float4(v, v, v, alpha);
 
 }
