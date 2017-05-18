@@ -346,6 +346,7 @@ ID3D11Texture2D*         g_pDepthStencil = nullptr;
 ID3D11DepthStencilView*  g_pDepthStencilView = nullptr;
 ID3D11BlendState*        g_pBlendStateBlend = NULL;
 ID3D11BlendState*        g_pBlendStateMask = NULL;
+ID3D11BlendState*        g_pBlendStateAdd = NULL;
 ID3D11DepthStencilState* g_pDepthStencilState = NULL;
 ID3D11DepthStencilState* g_pDepthStencilStateFill = NULL;
 ID3D11DepthStencilState* g_pDepthStencilStateGreaterOrEqualIncr = NULL;
@@ -1022,8 +1023,10 @@ HRESULT InitDevice()
 
 	D3D11_BLEND_DESC BlendState;
 	D3D11_BLEND_DESC MaskedBlendState;
+	D3D11_BLEND_DESC AdditiveBlendState;
 	ZeroMemory(&BlendState, sizeof(D3D11_BLEND_DESC));
 	ZeroMemory(&MaskedBlendState, sizeof(D3D11_BLEND_DESC));
+	ZeroMemory(&AdditiveBlendState, sizeof(D3D11_BLEND_DESC));
 
 	BlendState.RenderTarget[0].BlendEnable = TRUE;
 	BlendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
@@ -1037,9 +1040,19 @@ HRESULT InitDevice()
 	MaskedBlendState.RenderTarget[0] = BlendState.RenderTarget[0];
 	MaskedBlendState.RenderTarget[0].RenderTargetWriteMask = 0x0;
 
+	AdditiveBlendState.RenderTarget[0].BlendEnable = TRUE;
+	AdditiveBlendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	AdditiveBlendState.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	AdditiveBlendState.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_ALPHA;
+	AdditiveBlendState.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	AdditiveBlendState.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	AdditiveBlendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+	AdditiveBlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+
 	g_pd3dDevice->CreateBlendState(&BlendState, &g_pBlendStateBlend);
 	g_pd3dDevice->CreateBlendState(&MaskedBlendState, &g_pBlendStateMask);
-
+	g_pd3dDevice->CreateBlendState(&AdditiveBlendState, &g_pBlendStateAdd);
+	
 	D3D11_DEPTH_STENCIL_DESC DepthStencilState;
 	ZeroMemory(&DepthStencilState, sizeof(D3D11_DEPTH_STENCIL_DESC));
 	DepthStencilState.DepthEnable = FALSE;
@@ -1495,7 +1508,7 @@ void Render() {
 		g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 		g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
-		g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
+		g_pImmediateContext->OMSetBlendState(g_pBlendStateAdd, blendFactor, sampleMask);
 
 		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

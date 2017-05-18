@@ -59,7 +59,7 @@ static LensInterface interfaces[NUM_INTERFACE] = {
     { float3(0, 0, -156.589), 261.743, float3(1.62041, 1, 1), 18, 1.38, false },
     { float3(0, 0, 50.792), 54.262, float3(1, 1, 1.6968), 18, 1.38, false },
     { float3(0, 0, 6094.33), -5995.28, float3(1.6968, 1, 1), 18, 1.38, false },
-    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 5, 1.38, true },
+    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 2, 1.38, true },
     { float3(0, 0, 169.136), -74.414, float3(1, 1, 1.90265), 13, 1.38, false },
     { float3(0, 0, 155.451), -62.929, float3(1.90265, 1, 1.5168), 13, 1.38, false },
     { float3(0, 0, -30.308), 121.38, float3(1.5168, 1, 1), 13.1, 1.38, false },
@@ -246,13 +246,13 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		{
 			r.dir = reflect(r.dir,i.norm);
 
-			float _lambda = 5.0e-4;
-			float _n1 = max(sqrt(n0*n2), 1.38f * 10); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
+			float _lambda = 500;
+			float _n1 = n1 * 4 + 1;//max(sqrt(n0*n2), 1.38f * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
 			float _Fd1 = _lambda / 4.f / _n1;
 
-			//float R = 0.2f;
+			float R = 0.2f;
 			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
-			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			//float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -331,7 +331,7 @@ float get_area(int2 pos) {
 	float Oa = unit_patch_length * unit_patch_length * no_area_contributors;
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 5.f;
+	float energy = 1.f;
 	
 	return (Oa/Na) * energy;
 
@@ -431,7 +431,7 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	float alpha5 = i * saturate(mask.w);
 
 	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
-	float v = i;
-    return float4(v, v, v, alpha);
+	float v = alpha;
+    return float4(v, v, v, 1);
 
 }
