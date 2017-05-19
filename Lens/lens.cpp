@@ -163,7 +163,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f },
 	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f },
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f, 10.0f },
+	{       0.0f,     dAp, 1.00000f, true,  18.f,  5.0f },
 
 	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f },
 
@@ -218,7 +218,7 @@ float speed        = 0.1f;
 float focus_speed  = 0.0f;
 float swing_angle  = 0.2f;
 float swing_speed  = 1.0f;
-float rays_spread  = 0.75f;
+float rays_spread  = 5.0f;
 
 bool left_mouse_down = false;
 bool spacebar_down = false;
@@ -389,23 +389,23 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		if (msg.message == WM_KEYDOWN) {
 			if (msg.wParam == 37) {
 				ghost_bounce_1 = std::max<int>(2, ghost_bounce_1 - 1);
-				Sleep(20);
+				Sleep(80);
 			}
 
 			if (msg.wParam == 39) {
 				ghost_bounce_1 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_1 + 1);
-				Sleep(20);
+				Sleep(80);
 			}
 
 			if (msg.wParam == 38) {
 				ghost_bounce_2 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_2 + 1);
 				ghost_bounce_2 = std::min<int>(ghost_bounce_1 - 2, ghost_bounce_2);
-				Sleep(20);
+				Sleep(80);
 			}
 
 			if (msg.wParam == 40) {
 				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
-				Sleep(20);
+				Sleep(80);
 			}
 
 			ghost_bounce_1 = std::max<int>(ghost_bounce_2 + 2, ghost_bounce_1);
@@ -979,6 +979,7 @@ HRESULT InitDevice()
 	UINT numElements = ARRAYSIZE(layout);
 
 	// Default shader
+
 	hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_5_0", &blob);
 	hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pVertexShader);
 	hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout2d);
@@ -1475,7 +1476,11 @@ void AnimateFocusGroup() {
 }
 
 void AnimateRayDirection() {
-	direction = vec3(-x_dir, y_dir, -1.f);
+	#if defined(DRAWLENSFLARE)
+		direction = normalize(vec3(-x_dir, y_dir, -1.f));
+	#else
+		direction = normalize(vec3(0, y_dir, -1.f));
+	#endif
 }
 
 void Tick() {

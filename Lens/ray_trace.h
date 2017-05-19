@@ -14,7 +14,7 @@ using namespace std;
 
 #define NUM_INTERFACE 1
 #define NUM_BOUNCE 2
-#define AP_IDX 1
+#define AP_IDX 14
 #define PI 3.14159265359f
 
 struct vec3 {
