@@ -1,6 +1,7 @@
 cbuffer GlobalUniforms : register(b1) {
 	float time, g1, g2, spread;
 	float4 direction;
+	float4 backbuffer_size;
 };
 
 struct PS_INPUT {
@@ -34,6 +35,7 @@ struct Intersection {
 
 StructuredBuffer<PS_INPUT> Buffer0 : register(t0);
 RWStructuredBuffer<PS_INPUT> uav_buffer : register(u0);
+Texture2D hdrTexture : register(t1);
 
 #define GLOBAL_SCALE 1.f
 #define NUM_THREADS 32
@@ -364,8 +366,9 @@ PS_INPUT VS( float4 pos : POSITION ) {
 	
 	PS_INPUT result = getTraceResult(ndc);
 
+	float ratio = backbuffer_size.x/backbuffer_size.y;
 	float scale = 1.f/(interfaces[NUM_INTERFACE-1].sa);
-	result.position.xy *= scale * GLOBAL_SCALE * float2(1.f, 2.f);
+	result.position.xy *= scale * GLOBAL_SCALE * float2(1.f, ratio);
 	result.position.zw = float2(0.f, 1.f);
 
 	return result;
@@ -432,6 +435,22 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 
 	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
 	float3 v = alpha * float3(232, 127, 61)/255.f;
-    return float4(v, 1.f);
+	return float4(v, 1.f);
 
+}
+
+float3 ACESFilm( float3 x )
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x*(a*x+b))/(x*(c*x+d)+e));
+}
+
+float4 PSTM( float4 Pos : SV_POSITION ) : SV_Target {
+	float3 c = hdrTexture.Load(int3(Pos.xy,0)).rgb;
+	c = ACESFilm(c);
+	return float4(c, 1);
 }

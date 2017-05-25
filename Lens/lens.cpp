@@ -103,7 +103,7 @@ struct GlobalUniforms {
 	float g2;
 	float spread;
 	XMFLOAT4 direction;
-
+	XMFLOAT4 backbuffer_size;
 };
 
 namespace LensShapes {
@@ -315,45 +315,50 @@ XMFLOAT4 lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
 //--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
-HINSTANCE                g_hInst = nullptr;
-HWND                     g_hWnd = nullptr;
-D3D_DRIVER_TYPE          g_driverType = D3D_DRIVER_TYPE_NULL;
-D3D_FEATURE_LEVEL        g_featureLevel = D3D_FEATURE_LEVEL_11_0;
-ID3D11Device*            g_pd3dDevice = nullptr;
-ID3D11Device1*           g_pd3dDevice1 = nullptr;
-ID3D11DeviceContext*     g_pImmediateContext = nullptr;
-ID3D11DeviceContext1*    g_pImmediateContext1 = nullptr;
-IDXGISwapChain*          g_pSwapChain = nullptr;
-IDXGISwapChain1*         g_pSwapChain1 = nullptr;
-ID3D11RenderTargetView*  g_pRenderTargetView = nullptr;
-ID3D11VertexShader*      g_pVertexShader = nullptr;
-ID3D11PixelShader*       g_pPixelShader = nullptr;
+HINSTANCE                 g_hInst = nullptr;
+HWND                      g_hWnd = nullptr;
+D3D_DRIVER_TYPE           g_driverType = D3D_DRIVER_TYPE_NULL;
+D3D_FEATURE_LEVEL         g_featureLevel = D3D_FEATURE_LEVEL_11_0;
+ID3D11Device*             g_pd3dDevice = nullptr;
+ID3D11Device1*            g_pd3dDevice1 = nullptr;
+ID3D11DeviceContext*      g_pImmediateContext = nullptr;
+ID3D11DeviceContext1*     g_pImmediateContext1 = nullptr;
+IDXGISwapChain*           g_pSwapChain = nullptr;
+IDXGISwapChain1*          g_pSwapChain1 = nullptr;
+ID3D11RenderTargetView*   g_pRenderTargetView = nullptr;
+ID3D11VertexShader*       g_pVertexShader = nullptr;
+ID3D11PixelShader*        g_pPixelShader = nullptr;
+ID3D11PixelShader*        g_pToneMapPixelShader = nullptr;
 
-ID3D11VertexShader*      g_pFlareVertexShader = nullptr;
-ID3D11GeometryShader*    g_pFlareGeometryShader = nullptr;
-ID3D11VertexShader*      g_pFlareVertexShaderCompute = nullptr;
-ID3D11PixelShader*       g_pFlarePixelShader = nullptr;
-ID3D11ComputeShader*     g_pComputeShader = nullptr;
+ID3D11VertexShader*       g_pFlareVertexShader = nullptr;
+ID3D11GeometryShader*     g_pFlareGeometryShader = nullptr;
+ID3D11VertexShader*       g_pFlareVertexShaderCompute = nullptr;
+ID3D11PixelShader*        g_pFlarePixelShader = nullptr;
+ID3D11ComputeShader*      g_pComputeShader = nullptr;
 
-ID3D11InputLayout*       g_pVertexLayout2d = nullptr;
-ID3D11InputLayout*       g_pVertexLayout3d = nullptr;
-ID3D11Buffer*            g_GlobalUniforms = nullptr;
-ID3D11Buffer*            g_InstanceUniforms = nullptr;
-ID3D11Buffer*            g_IntersectionPoints1 = nullptr;
-ID3D11Buffer*            g_IntersectionPoints2 = nullptr;
-ID3D11Buffer*            g_IntersectionPoints3 = nullptr;
-ID3D11Texture2D*         g_pDepthStencil = nullptr;
-ID3D11DepthStencilView*  g_pDepthStencilView = nullptr;
-ID3D11BlendState*        g_pBlendStateBlend = NULL;
-ID3D11BlendState*        g_pBlendStateMask = NULL;
-ID3D11BlendState*        g_pBlendStateAdd = NULL;
-ID3D11DepthStencilState* g_pDepthStencilState = NULL;
-ID3D11DepthStencilState* g_pDepthStencilStateFill = NULL;
-ID3D11DepthStencilState* g_pDepthStencilStateGreaterOrEqualIncr = NULL;
-ID3D11DepthStencilState* g_pDepthStencilStateGreaterOrEqualDecr = NULL;
-ID3D11DepthStencilState* g_pDepthStencilStateGreaterOrEqualRead = NULL;
-ID3D11RasterizerState*   g_pRasterStateNoCull = NULL;
-ID3D11RasterizerState*   g_pRasterStateCull = NULL;
+ID3D11InputLayout*        g_pVertexLayout2d = nullptr;
+ID3D11InputLayout*        g_pVertexLayout3d = nullptr;
+ID3D11Buffer*             g_GlobalUniforms = nullptr;
+ID3D11Buffer*             g_InstanceUniforms = nullptr;
+ID3D11Buffer*             g_IntersectionPoints1 = nullptr;
+ID3D11Buffer*             g_IntersectionPoints2 = nullptr;
+ID3D11Buffer*             g_IntersectionPoints3 = nullptr;
+ID3D11Texture2D*          g_pDepthStencil = nullptr;
+ID3D11Texture2D*          g_pHDRTexture = nullptr;
+ID3D11DepthStencilView*   g_pDepthStencilView = nullptr;
+ID3D11RenderTargetView*   g_pHDRView = nullptr;
+ID3D11ShaderResourceView* g_pShaderHDRView = nullptr;
+
+ID3D11BlendState*         g_pBlendStateBlend = NULL;
+ID3D11BlendState*         g_pBlendStateMask = NULL;
+ID3D11BlendState*         g_pBlendStateAdd = NULL;
+ID3D11DepthStencilState*  g_pDepthStencilState = NULL;
+ID3D11DepthStencilState*  g_pDepthStencilStateFill = NULL;
+ID3D11DepthStencilState*  g_pDepthStencilStateGreaterOrEqualIncr = NULL;
+ID3D11DepthStencilState*  g_pDepthStencilStateGreaterOrEqualDecr = NULL;
+ID3D11DepthStencilState*  g_pDepthStencilStateGreaterOrEqualRead = NULL;
+ID3D11RasterizerState*    g_pRasterStateNoCull = NULL;
+ID3D11RasterizerState*    g_pRasterStateCull = NULL;
 
 
 //--------------------------------------------------------------------------------------
@@ -443,8 +448,8 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			GetCursorPos(&p);
 			ScreenToClient(g_hWnd, &p);
 			if (left_mouse_down) {
-				x_dir = ((p.x / backbuffer_width) * 2 - 1) * 0.2;
-				y_dir = ((p.y / backbuffer_height) * 2 - 1) * 0.2;
+				x_dir = ((p.x / backbuffer_width) * 2.f - 1.f) * 0.2f;
+				y_dir = ((p.y / backbuffer_height) * 2.f - 1.f) * 0.2f;
 			}
 		}
 
@@ -936,7 +941,6 @@ HRESULT InitDevice()
 	descDepth.CPUAccessFlags = 0;
 	descDepth.MiscFlags = 0;
 	hr = g_pd3dDevice->CreateTexture2D(&descDepth, nullptr, &g_pDepthStencil);
-	
 	if (FAILED(hr))
 		return hr;
 
@@ -947,6 +951,42 @@ HRESULT InitDevice()
 	descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 	descDSV.Texture2D.MipSlice = 0;
 	hr = g_pd3dDevice->CreateDepthStencilView(g_pDepthStencil, &descDSV, &g_pDepthStencilView);
+	if (FAILED(hr))
+		return hr;
+
+	D3D11_TEXTURE2D_DESC descHDR;
+	ZeroMemory(&descHDR, sizeof(descHDR));
+	descHDR.Width = width;
+	descHDR.Height = height;
+	descHDR.MipLevels = 1;
+	descHDR.ArraySize = 1;
+	descHDR.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	descHDR.SampleDesc.Count = 1;
+	descHDR.SampleDesc.Quality = 0;
+	descHDR.Usage = D3D11_USAGE_DEFAULT;
+	descHDR.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	descHDR.CPUAccessFlags = 0;
+	descHDR.MiscFlags = 0;
+	hr = g_pd3dDevice->CreateTexture2D(&descHDR, nullptr, &g_pHDRTexture);
+	if (FAILED(hr))
+		return hr;
+
+	// Create the HDR view
+	D3D11_RENDER_TARGET_VIEW_DESC descHDRV;
+	ZeroMemory(&descHDRV, sizeof(descHDRV));
+	descHDRV.Format = descHDR.Format;
+	descHDRV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+	descHDRV.Texture2D.MipSlice = 0;
+	hr = g_pd3dDevice->CreateRenderTargetView(g_pHDRTexture, &descHDRV, &g_pHDRView);
+	if (FAILED(hr))
+		return hr;
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC descShaderHDRV;
+	descShaderHDRV.Format = descHDR.Format;
+	descShaderHDRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	descShaderHDRV.Texture2D.MostDetailedMip = 0;
+	descShaderHDRV.Texture2D.MipLevels = 1;
+	hr = g_pd3dDevice->CreateShaderResourceView(g_pHDRTexture, &descShaderHDRV, &g_pShaderHDRView);
 	if (FAILED(hr))
 		return hr;
 
@@ -1014,11 +1054,17 @@ HRESULT InitDevice()
 	hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pComputeShader);
 	blob->Release();
 
+	hr = CompileShaderFromFile(L"lens.hlsl", "PSTM", "ps_5_0", &blob);
+	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pToneMapPixelShader);
+	blob->Release();
+
 	D3D11_RASTERIZER_DESC rasterState;
 	ZeroMemory(&rasterState, sizeof(D3D11_RASTERIZER_DESC));
 	rasterState.FillMode = D3D11_FILL_SOLID;
+	rasterState.CullMode = D3D11_CULL_BACK;
 	//rasterState.FillMode = D3D11_FILL_WIREFRAME;
 	g_pd3dDevice->CreateRasterizerState(&rasterState, &g_pRasterStateCull);
+
 	rasterState.CullMode = D3D11_CULL_NONE;
 	g_pd3dDevice->CreateRasterizerState(&rasterState, &g_pRasterStateNoCull);
 
@@ -1210,6 +1256,14 @@ void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangl
 		context->IASetVertexBuffers(0, 1, &rectangle.lines, &stride, &offset);
 		context->Draw(5, 0);
 	}
+}
+
+void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color) {
+	InstanceUniforms cb = { color, XMFLOAT4(0.f, 0.f, 0.f, 0.f) };
+	context->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
+	context->Draw(6, 0);
 }
 
 void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
@@ -1487,7 +1541,10 @@ void Tick() {
 	time += speed;
 	//time = (GetTickCount64() - timer_start) / 1000.0f * speed;
 
-	GlobalUniforms cb = { time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread, XMFLOAT4(direction.x, direction.y, direction.z, 0) };
+	GlobalUniforms cb = {
+		time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread,
+		XMFLOAT4(direction.x, direction.y, direction.z, 0),
+		XMFLOAT4(backbuffer_width, backbuffer_height, 0, 0) };
 	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
@@ -1498,18 +1555,16 @@ void Render() {
 	Tick();
 	AnimateRayDirection();
 
-	if(draw2d)
-		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
-	else
-		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
-
 	#if defined(DRAWLENSFLARE)
 		int pt = patch_tesselation - 1;
 		ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
 		ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
+		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
+
 		g_pImmediateContext->RSSetState(g_pRasterStateNoCull);
-		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
+		g_pImmediateContext->OMSetRenderTargets(1, &g_pHDRView, g_pDepthStencilView);
+		g_pImmediateContext->ClearRenderTargetView(g_pHDRView, XMVECTORF32{ 0, 0, 0, 0 });
 		g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 		g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
@@ -1565,9 +1620,29 @@ void Render() {
 
 			g1++;
 		}
+
+		g_pImmediateContext->RSSetState(g_pRasterStateCull);
+		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
+		g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);
+		g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ 0,0,0,0});
+
+		g_pImmediateContext->VSSetShader(g_pVertexShader, nullptr, 0);
+		g_pImmediateContext->PSSetShader(g_pToneMapPixelShader, nullptr, 0);
+		g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+		g_pImmediateContext->PSSetShaderResources(1, 1, &g_pShaderHDRView);
+
+		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1);
+
+		g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);
+
+
 	#else
 		if(!draw2d) {
+			g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
 			g_pImmediateContext->RSSetState(g_pRasterStateNoCull);
+
+			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);			
 			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
 			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -1598,10 +1673,6 @@ void Render() {
 				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
 				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
-
-				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
-				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 			#else
 				g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ);
 
@@ -1614,6 +1685,9 @@ void Render() {
 			#endif
 		}
 		else {
+			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
+			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);
+
 			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
 			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 			g_pImmediateContext->RSSetState(g_pRasterStateCull);
