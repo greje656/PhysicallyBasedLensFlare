@@ -44,6 +44,7 @@ Texture2D hdrTexture : register(t1);
 #define AP_IDX 14
 #define PI 3.14159265359f
 #define NUM_INTERFACE 29
+#define DEBUG_VAL 0.0000001
 
 static LensInterface interfaces[NUM_INTERFACE] = {
 
@@ -104,7 +105,8 @@ Intersection testSPHERE(Ray r, LensInterface F) {
 	i.pos = r.dir * t + r.pos;
 	i.norm = normalize(i.pos - F.center);
 	if (dot(i.norm, r.dir) > 0) i.norm = -i.norm;
-	i.theta = acos(dot(-r.dir, i.norm));
+	float d = clamp(-1, 1, dot(-r.dir, i.norm));
+	i.theta = acos(d);
 	i.hit = true;
 	i.inverted = t < 0;
 	
@@ -139,10 +141,6 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 
 	if(isnan(out_p2))
 		out_p2 = 1.f;
-
-
-	out_s2 = saturate(out_s2);
-	out_p2 = saturate(out_p2);
 
 	return (out_s2 + out_p2) / 2.f; 
 }
@@ -231,13 +229,13 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		if (F.flat) continue;
 
 		// do reflection / refraction for spher . surfaces
-		float n0 = r.dir.z > 0.f ? F.n.x : F.n.z;
-		float n1 = F.n.y;
-		float n2 = r.dir.z > 0.f ? F.n.z : F.n.x;
-
-		//float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
+		//float n0 = r.dir.z > 0.f ? F.n.x : F.n.z;
 		//float n1 = F.n.y;
-		//float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
+		//float n2 = r.dir.z > 0.f ? F.n.z : F.n.x;
+
+		float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
+		float n1 = F.n.y;
+		float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
 
 		if (!bReflect) // refraction
 		{
@@ -248,13 +246,13 @@ Ray Trace( Ray r, float lambda, int2 STR) {
 		{
 			r.dir = reflect(r.dir,i.norm);
 
-			float _lambda = 0.00005;
-			float _n1 = n1 * 4;//max(sqrt(n0*n2), 1.38f * 2); // 1.38= lowest achievable d1 = lambda0 / 4 / n1; // phase delay
-			float _Fd1 = _lambda / 4.f / _n1;
+			float _n1 = n0;
+			float _n2 = n1; _n2 = max(sqrt(_n1*_n2) , 1.38);
+			float _n3 = n2;
+			float d1 = (560.0 * DEBUG_VAL) / 4.f / _n1;
+			float R = Reflectance(i.theta, lambda, d1, _n1, _n2, _n3);
 
-			//float R = 0.75f;
-			//float R = Reflectance(i.theta, _lambda, _Fd1, n0, _n1, n2);
-			float R = FresnelAR(i.theta, _lambda, _Fd1, n0, _n1, n2);
+			R = saturate(R);
 			r.tex.a *= R; // update ray intensity
 		}
 	}
@@ -348,7 +346,8 @@ PS_INPUT getTraceResult(float2 ndc){
 	starting_pos = i.pos - direction.xyz;
 
 	Ray r = { starting_pos, direction.xyz, float4(0,0,0,1) };
-	Ray g = Trace(r, 1.f, int2(g1, g2));
+
+	Ray g = Trace(r, 450.f * DEBUG_VAL, int2(g1, g2));
 
 	PS_INPUT result;
 	result.position = float4(g.pos.xyz, 1.f);
@@ -450,7 +449,29 @@ float3 ACESFilm( float3 x )
 }
 
 float4 PSTM( float4 Pos : SV_POSITION ) : SV_Target {
+	float2 uv = Pos.xy / backbuffer_size;
+	/*
+	float s = (sin(time * 0.1) + 2) * 0.001;
+	float theta0 = acos(uv.x * 2.f - 1.f);
+	
+	float lambda1 = 475 * s;
+	float lambda2 = 570 * s;
+	float lambda3 = 600 * s;
+	float lambda0 = 550 * s;
+	
+	float n1 = 1.86074;
+	float n2 = 1.9; n2 = max(sqrt(n1*n2) , 1.38);
+	float n3 = 1.0;
+	float d1 = lambda0 / 4.f / n1;
+	//float R = FresnelAR(theta0, lambda, d1, n0, n1, n2) * 0.05;
+	float R = Reflectance(theta0, lambda1, d1, n1, n2, n3);
+	float G = Reflectance(theta0, lambda2, d1, n1, n2, n3);
+	float B = Reflectance(theta0, lambda3, d1, n1, n2, n3);
+
+	return float4(R, G, B, 1);
+	*/
+
 	float3 c = hdrTexture.Load(int3(Pos.xy,0)).rgb;
-	c = ACESFilm(c);
+	//c = ACESFilm(c);
 	return float4(c, 1);
 }
