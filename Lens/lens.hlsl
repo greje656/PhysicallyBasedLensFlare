@@ -62,7 +62,7 @@ static LensInterface interfaces[NUM_INTERFACE] = {
     { float3(0, 0, -156.589), 261.743, float3(1.62041, 1, 1), 18, 1.38, false },
     { float3(0, 0, 50.792), 54.262, float3(1, 1, 1.6968), 18, 1.38, false },
     { float3(0, 0, 6094.33), -5995.28, float3(1.6968, 1, 1), 18, 1.38, false },
-    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 1, 1.38, true },
+    { float3(0, 0, 97.522), 0, float3(1, 1, 1), 5, 1.38, true },
     { float3(0, 0, 169.136), -74.414, float3(1, 1, 1.90265), 13, 1.38, false },
     { float3(0, 0, 155.451), -62.929, float3(1.90265, 1, 1.5168), 13, 1.38, false },
     { float3(0, 0, -30.308), 121.38, float3(1.5168, 1, 1), 13.1, 1.38, false },
@@ -366,7 +366,7 @@ PS_INPUT VS( float4 pos : POSITION ) {
 	PS_INPUT result = getTraceResult(ndc);
 
 	float ratio = backbuffer_size.x/backbuffer_size.y;
-	float scale = 1.f/(interfaces[NUM_INTERFACE-1].sa);
+	float scale = 1.f / (interfaces[NUM_INTERFACE-1].sa);
 	result.position.xy *= scale * GLOBAL_SCALE * float2(1.f, ratio);
 	result.position.zw = float2(0.f, 1.f);
 
@@ -426,13 +426,19 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 	
 	float i = 1 - saturate((length(mask.xy) - 0.95)/0.05);
 
-	float alpha1 = color.a;
+	float alpha1 = 1;//color.a;
 	float alpha2 = color.z < 1.0f;
-	float alpha3 = length(mask.xy) < 0.5f;
-	float alpha4 = 1;//length(color.xy) < 1.0f;
-	float alpha5 = saturate(mask.w);
+	float alpha3 = 1;//length(mask.xy) < 0.5f;
+	float alpha4 = length(color.xy) < 1.0f;
+	float alpha5 = 1;//saturate(mask.w);
+
 
 	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
+
+	[branch]
+	if(alpha == 0.f)
+		discard;
+
 	float3 v = alpha * float3(232, 127, 61)/255.f;
 	return float4(v, 1.f);
 

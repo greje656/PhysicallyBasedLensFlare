@@ -11,9 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//#define DRAW2D
-//#define DRAW3D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 #define USE_COMPUTE
 
@@ -1287,7 +1286,7 @@ void DrawFlat(LensInterface& right) {
 	
 	XMFLOAT4 mask_placement1 = { mx, 1.f, mw * 1.00f, global_scale * right.w };
 	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.h };
-	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w * 0.9f };
+	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w };
 
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateMask, blendFactor, sampleMask);
 	g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilStateFill, 1);
