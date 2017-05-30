@@ -62,16 +62,6 @@ float4 PS( float4 Pos : SV_POSITION ) : SV_Target {
 }
 )";
 
-//--------------------------------------------------------------------------------------
-// FLARE
-//--------------------------------------------------------------------------------------
-
-const std::string flare_vertex_shader_source = R"(
-)";
-
-const std::string flare_pixel_shader_source = R"(
-)";
-
 struct PatentFormat {
 	float r;
 	float d;
@@ -79,6 +69,7 @@ struct PatentFormat {
 	bool flat;
 	float w;
 	float h;
+	float lambda;
 };
 
 struct SimpleVertex {
@@ -96,13 +87,15 @@ struct InstanceUniforms {
 	XMFLOAT4 placement;
 };
 
-struct GlobalUniforms {
+struct GlobalData {
 	float time;
-	float g1;
-	float g2;
 	float spread;
+	XMFLOAT2 backbuffer_size;
 	XMFLOAT4 direction;
-	XMFLOAT4 backbuffer_size;
+};
+
+struct GhostData {
+	XMFLOAT4 bounces;
 };
 
 namespace LensShapes {
@@ -141,51 +134,51 @@ const float d20 = 16.889f;
 const float Bf  = 39.683f;
 
 std::vector<PatentFormat> nikon_28_75mm_lens_components = {
-	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f },
-	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f },
+	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 1.38 },
+	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 1.38 },
 
-	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f },
-	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f },
+	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f, 1.38 },
+	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f, 1.38 },
 
-	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f },
-	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f },
+	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f, 1.38 },
+	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f, 1.38 },
 
-	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f },
-	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f },
+	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f, 1.38 },
+	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f, 1.38 },
 
-	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f },
-	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f },
+	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f, 1.38 },
+	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f, 1.38 },
 
-	{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f },
-	{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f },
+	{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f, 1.38 },
+	{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f, 1.38 },
 
-	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f },
-	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f },
+	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 1.38 },
+	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 1.38 },
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f,  5.0f },
+	{       0.0f,     dAp, 1.00000f, true,  18.f,  5.0f, 1.38 },
 
-	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f },
+	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 1.38 },
 
-	{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f },
-	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f },
+	{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f, 1.38 },
+	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f, 1.38 },
 
-	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f },
+	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f, 1.38 },
 
-	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f },
-	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f },
+	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f, 1.38 },
+	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f, 1.38 },
 
-	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f },
+	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f, 1.38 },
 
-	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f },
-	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f },
+	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f, 1.38 },
+	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f, 1.38 },
 
-	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f },
-	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f },
+	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f, 1.38 },
+	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f, 1.38 },
 
-	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f },
-	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f },
+	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f, 1.38 },
+	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f, 1.38 },
 
-	{        0.f,     5.f, 1.00000f,  true, 20.f,  0.0f },
+	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 1.38 }
 };
 
 int patch_tesselation = 32;
@@ -204,6 +197,7 @@ int num_of_intersections_3 = num_of_lens_components;
 
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
+int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float ratio = backbuffer_height / backbuffer_width;
@@ -214,9 +208,6 @@ float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
 float speed        = 0.1f;
-float focus_speed  = 0.0f;
-float swing_angle  = 0.2f;
-float swing_speed  = 1.0f;
 float rays_spread  = 5.0f;
 
 bool left_mouse_down = false;
@@ -337,11 +328,16 @@ ID3D11ComputeShader*      g_pComputeShader = nullptr;
 
 ID3D11InputLayout*        g_pVertexLayout2d = nullptr;
 ID3D11InputLayout*        g_pVertexLayout3d = nullptr;
-ID3D11Buffer*             g_GlobalUniforms = nullptr;
+ID3D11Buffer*             g_GlobalData = nullptr;
+ID3D11Buffer*             g_GhostData = nullptr;
 ID3D11Buffer*             g_InstanceUniforms = nullptr;
 ID3D11Buffer*             g_IntersectionPoints1 = nullptr;
 ID3D11Buffer*             g_IntersectionPoints2 = nullptr;
 ID3D11Buffer*             g_IntersectionPoints3 = nullptr;
+
+ID3D11Buffer*             g_LensInterface = nullptr;
+ID3D11UnorderedAccessView* g_LensInterfaceResourceView;
+
 ID3D11Texture2D*          g_pDepthStencil = nullptr;
 ID3D11Texture2D*          g_pHDRTexture = nullptr;
 ID3D11DepthStencilView*   g_pDepthStencilView = nullptr;
@@ -360,15 +356,10 @@ ID3D11RasterizerState*    g_pRasterStateNoCull = NULL;
 ID3D11RasterizerState*    g_pRasterStateCull = NULL;
 
 
-//--------------------------------------------------------------------------------------
-// Forward declarations
-//--------------------------------------------------------------------------------------
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
-void CleanupDevice();
 void Render();
-
 
 //--------------------------------------------------------------------------------------
 // Entry point to the program. Initializes everything and goes into a message processing 
@@ -382,7 +373,6 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		return 0;
 
 	if( FAILED( InitDevice() ) ) {
-		CleanupDevice();
 		return 0;
 	}
 
@@ -459,8 +449,6 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			Render();
 		}
 	}
-
-	CleanupDevice();
 
 	return ( int )msg.wParam;
 }
@@ -784,23 +772,32 @@ void ParseLensComponents() {
 		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
 		vec3 n = { left_ior, 1.f, right_ior };
 
-		LensInterface component = { total_lens_distance, center, entry.r, n, entry.h, 1.38f, entry.flat, entry.w, entry.h };
+		LensInterface component = { center, entry.r, n, entry.h, entry.lambda, (float)entry.flat, total_lens_distance, entry.w };
 		nikon_28_75mm_lens_interface[i] = component;
 	}
-	
-	std::stringstream s;
-	s << "#define NUM_INTERFACE " << nikon_28_75mm_lens_components.size() << "\n";
-	s << "static LensInterface interfaces[NUM_INTERFACE] = {\n\n";
-	for (int i = 0; i < (int)nikon_28_75mm_lens_interface.size(); ++i) {
-		LensInterface& c = nikon_28_75mm_lens_interface[i];
-		s << "    { float3(" << c.center.x << ", " << c.center.y << ", " << c.center.z << "), " << c.radius << ", ";
-		s << "float3(" << c.n.x << ", " << c.n.y << ", " << c.n.z << "), " << c.h << ", " << c.d1 << ", ";
-		s << (c.flat ? "true" : "false") << " },\n";
-	}
-	s << "\n};";
 
-	std::string sss = s.str();
-	int tt = 0; tt;
+	HRESULT hr;
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	bd.CPUAccessFlags = 0;
+	bd.ByteWidth = (int)nikon_28_75mm_lens_interface.size() * (int)sizeof(LensInterface);
+	bd.StructureByteStride = sizeof(LensInterface);
+
+	D3D11_SUBRESOURCE_DATA data;
+	data.pSysMem = &nikon_28_75mm_lens_interface.front();
+	hr = g_pd3dDevice->CreateBuffer(&bd, &data, &g_LensInterface);
+
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
+	ZeroMemory(&uaDescView, sizeof(uaDescView));
+	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	uaDescView.Buffer.FirstElement = 0;
+	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
+	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+	hr = g_pd3dDevice->CreateUnorderedAccessView(g_LensInterface, &uaDescView, &g_LensInterfaceResourceView);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1017,8 +1014,6 @@ HRESULT InitDevice()
 	D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
 	UINT numElements = ARRAYSIZE(layout);
 
-	// Default shader
-
 	hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_5_0", &blob);
 	hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pVertexShader);
 	hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout2d);
@@ -1028,22 +1023,10 @@ HRESULT InitDevice()
 	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pPixelShader);
 	blob->Release();
 
-	// Flare shader
-	hr = CompileShaderFromFile(L"lens.hlsl", "GS", "gs_5_0", &blob);
-	hr = g_pd3dDevice->CreateGeometryShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlareGeometryShader);
+	hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
+	hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlareVertexShaderCompute);
+	hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
 	blob->Release();
-
-	#if defined(USE_COMPUTE)
-		hr = CompileShaderFromFile(L"lens.hlsl", "VSC", "vs_5_0", &blob);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlareVertexShaderCompute);
-		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
-		blob->Release();
-	#else	
-		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlareVertexShader);
-		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
-		blob->Release();
-	#endif
 
 	hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
 	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pFlarePixelShader);
@@ -1053,7 +1036,7 @@ HRESULT InitDevice()
 	hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pComputeShader);
 	blob->Release();
 
-	hr = CompileShaderFromFile(L"lens.hlsl", "PSTM", "ps_5_0", &blob);
+	hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
 	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pToneMapPixelShader);
 	blob->Release();
 
@@ -1166,8 +1149,15 @@ HRESULT InitDevice()
 	bd.Usage = D3D11_USAGE_DEFAULT;
 	bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	bd.CPUAccessFlags = 0;
-	bd.ByteWidth = sizeof(GlobalUniforms);
-	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_GlobalUniforms);
+	bd.ByteWidth = sizeof(GlobalData);
+	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_GlobalData);
+
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	bd.CPUAccessFlags = 0;
+	bd.ByteWidth = sizeof(GhostData);
+	hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &g_GhostData);
 
 	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
@@ -1186,36 +1176,6 @@ HRESULT InitDevice()
 	ParseLensComponents();
 
 	return S_OK;
-}
-
-
-//--------------------------------------------------------------------------------------
-// Clean up the objects we've created
-//--------------------------------------------------------------------------------------
-void CleanupDevice() {
-	if( g_pImmediateContext ) g_pImmediateContext->ClearState();
-	if( g_pVertexShader ) g_pVertexShader->Release();
-	if (g_pPixelShader) g_pPixelShader->Release();
-	if( g_pRenderTargetView ) g_pRenderTargetView->Release();
-	if( g_pSwapChain1 ) g_pSwapChain1->Release();
-	if( g_pSwapChain ) g_pSwapChain->Release();
-	if( g_pImmediateContext1 ) g_pImmediateContext1->Release();
-	if( g_pImmediateContext ) g_pImmediateContext->Release();
-	if( g_pd3dDevice1 ) g_pd3dDevice1->Release();
-	if (g_pd3dDevice) g_pd3dDevice->Release();
-	if (g_InstanceUniforms) g_InstanceUniforms->Release();
-	if (g_IntersectionPoints1) g_IntersectionPoints1->Release();
-	if (g_IntersectionPoints2) g_IntersectionPoints2->Release();
-	if (g_IntersectionPoints3) g_IntersectionPoints3->Release();
-	if (g_pDepthStencil) g_pDepthStencil->Release();
-	if (g_pDepthStencilView) g_pDepthStencilView->Release();
-	if (g_pBlendStateBlend) g_pBlendStateBlend->Release();
-	if (g_pBlendStateMask) g_pBlendStateMask->Release();
-	if (g_pDepthStencilState) g_pDepthStencilState->Release();
-	if (g_pDepthStencilStateFill) g_pDepthStencilStateFill->Release();
-	if (g_pDepthStencilStateGreaterOrEqualIncr) g_pDepthStencilStateGreaterOrEqualIncr->Release();
-	if (g_pDepthStencilStateGreaterOrEqualDecr) g_pDepthStencilStateGreaterOrEqualDecr->Release();
-	if (g_pDepthStencilStateGreaterOrEqualRead) g_pDepthStencilStateGreaterOrEqualRead->Release();
 }
 
 //--------------------------------------------------------------------------------------
@@ -1249,8 +1209,7 @@ void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangl
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
 		context->Draw(6, 0);
-	}
-	else {
+	} else {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 		context->IASetVertexBuffers(0, 1, &rectangle.lines, &stride, &offset);
 		context->Draw(5, 0);
@@ -1272,8 +1231,7 @@ void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOA
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		context->IASetVertexBuffers(0, 1, &circle.triangles, &stride, &offset);
 		context->Draw(num_vertices_per_cirlces, 0);
-	}
-	else {
+	} else {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 		context->IASetVertexBuffers(0, 1, &circle.lines, &stride, &offset);
 		context->Draw(num_points_per_cirlces, 0);
@@ -1285,7 +1243,7 @@ void DrawFlat(LensInterface& right) {
 	float mw = global_scale * 0.4f;
 	
 	XMFLOAT4 mask_placement1 = { mx, 1.f, mw * 1.00f, global_scale * right.w };
-	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.h };
+	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.sa };
 	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w };
 
 	g_pImmediateContext->OMSetBlendState(g_pBlendStateMask, blendFactor, sampleMask);
@@ -1343,7 +1301,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float delta = abs(_right.pos - _left.pos) * 0.5f;
 		float mx = -(_right.pos * global_scale - 1.f) + eps;
 		float mw = (min_radius - delta) * global_scale * right.w;
-		float mh = global_scale * right.h;
+		float mh = global_scale * right.sa;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh * 1.001f };
 		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.997f };
 
@@ -1390,7 +1348,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float delta = abs(right.pos - left.pos);
 		float mx = -(right.pos * global_scale - 1.f) + eps;
 		float mw = -delta * global_scale * right.w - eps;
-		float mh = global_scale * right.h;
+		float mh = global_scale * right.sa;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh };
 		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.997f };
 
@@ -1436,7 +1394,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float w = delta * right.w;
 		float mx = -((right.pos + delta * 0.5f + w) * global_scale - 1.f);
 		float mw = global_scale * w;
-		float mh = global_scale * right.h;
+		float mh = global_scale * right.sa;
 		XMFLOAT4 mask_placement = { mx, 1.f, mw, mh };
 		XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 0.995f, mh * 0.995f };
 
@@ -1520,42 +1478,26 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->Draw((int)intersections.size(), 0);
 }
 
-void AnimateFocusGroup() {
-	float anim_g4_lens = sin(time * focus_speed) * 0.01f;
-	for (int i = 6; i < 14; ++i) {
-		nikon_28_75mm_lens_interface[i].center.z += anim_g4_lens;
-		nikon_28_75mm_lens_interface[i].pos += anim_g4_lens;
-	}
-}
-
-void AnimateRayDirection() {
+void UpdateGlobals() {
+	time += speed;
+	
 	#if defined(DRAWLENSFLARE)
 		direction = normalize(vec3(-x_dir, y_dir, -1.f));
 	#else
 		direction = normalize(vec3(0, y_dir, -1.f));
 	#endif
-}
 
-void Tick() {
-	time += speed;
-	//time = (GetTickCount64() - timer_start) / 1000.0f * speed;
-
-	GlobalUniforms cb = {
-		time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread,
-		XMFLOAT4(direction.x, direction.y, direction.z, 0),
-		XMFLOAT4(backbuffer_width, backbuffer_height, 0, 0) };
-	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
+	GlobalData cb = { time, rays_spread, XMFLOAT2(backbuffer_width, backbuffer_height), XMFLOAT4(direction.x, direction.y, direction.z, 0) };
+	g_pImmediateContext->UpdateSubresource(g_GlobalData, 0, nullptr, &cb, 0, 0);
 }
 
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
 void Render() {
-	Tick();
-	AnimateRayDirection();
+	UpdateGlobals();
 
 	#if defined(DRAWLENSFLARE)
-		int pt = patch_tesselation - 1;
 		ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
 		ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
@@ -1573,51 +1515,46 @@ void Render() {
 		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalData);
+		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
 
 		#if defined(USE_COMPUTE)
 			g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
-			g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+			g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
+			g_pImmediateContext->CSSetConstantBuffers(2, 1, &g_GhostData);
 			g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
 		#else
 			g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
 			g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vs_vertices, &stride, &offset);
 		#endif
 		
-		int g1 = 2;
-		int g2 = 1;
+		int bounce1 = 2;
+		int bounce2 = 1;
 
 		while (true) {
 
-			if (g1 == 15) g1++;
-			if (g2 == 15) g2++;
-
-			if (g1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
-				g2++;
-				g1 = g2 + 1;
+			if (bounce1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+				bounce2++;
+				bounce1 = bounce2 + 1;
 			}
 
-			if (g2 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+			if (bounce2 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
 				break;
 			}
 
-			GlobalUniforms cb = { time, (float)g1 , (float)g2, rays_spread, XMFLOAT4(direction.x, direction.y, direction.z, 0) };
-			g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
+			GhostData cb = { XMFLOAT4(bounce1, bounce2, 0, 0) };
+			g_pImmediateContext->UpdateSubresource(g_GhostData, 0, nullptr, &cb, 0, 0);
 
-			#if defined(USE_COMPUTE)
-				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-				g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
-				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &g_LensInterfaceResourceView, nullptr);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
-				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
-				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
-			#else
-				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
-			#endif
+			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 
-			g1++;
+			bounce1++;
 		}
 
 		g_pImmediateContext->RSSetState(g_pRasterStateCull);
@@ -1638,65 +1575,57 @@ void Render() {
 
 	#else
 		if(!draw2d) {
-			g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
-			g_pImmediateContext->RSSetState(g_pRasterStateNoCull);
-
-			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);			
-			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
-			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-
-			int pt = patch_tesselation - 1;
 			ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
 			ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
-			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+			GhostData cb = { XMFLOAT4((float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0) };
+			g_pImmediateContext->UpdateSubresource(g_GhostData, 0, nullptr, &cb, 0, 0);
 
+			g_pImmediateContext->RSSetState(g_pRasterStateNoCull);
+			g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
+			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);
 			g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
 			g_pImmediateContext->OMSetBlendState(g_pBlendStateBlend, blendFactor, sampleMask);
+			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
+			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+
+			g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
+			g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
+			g_pImmediateContext->CSSetConstantBuffers(2, 1, &g_GhostData);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &g_LensInterfaceResourceView, nullptr);
+
+			g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
+			g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalData);
 
 			g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
-			g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+			g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
+	
+			// Dispatch
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
-			#if defined(USE_COMPUTE)
-				g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		
-				g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
-				g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-				g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
-				g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-
-				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-				g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
-				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
-
-				g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
-				g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
-			#else
-				g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ);
-
-				g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
-				g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalUniforms);
-
-				g_pImmediateContext->GSSetShader(g_pFlareGeometryShader, nullptr, 0);
-				g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vs_vertices, &stride, &offset);
-				g_pImmediateContext->DrawIndexed(pt * pt * INDICES_PER_PRIM * 2, 0, 0);
-			#endif
+			// Draw
+			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 		}
 		else {
+			g_pImmediateContext->RSSetState(g_pRasterStateCull);
 			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
-			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);
 
+			g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, g_pDepthStencilView);
 			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
 			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-			g_pImmediateContext->RSSetState(g_pRasterStateCull);
 
 			g_pImmediateContext->VSSetShader(g_pVertexShader, nullptr, 0);
-			g_pImmediateContext->PSSetShader(g_pPixelShader, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
-			g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 
-			AnimateFocusGroup();
+			g_pImmediateContext->PSSetShader(g_pPixelShader, nullptr, 0);
+			g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 
 			// Trace all rays
 			std::vector<std::vector<vec3>> intersections1(num_of_rays);

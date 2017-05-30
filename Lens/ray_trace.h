@@ -41,15 +41,16 @@ struct int2 {
 };
 
 struct LensInterface {
-float pos;
 	vec3 center;
 	float radius;
+
 	vec3 n;
 	float sa;
+
 	float d1;
-	bool flat;
+	float flat;
+	float pos;
 	float w;
-	float h;
 };
 
 struct Ray {
@@ -204,7 +205,7 @@ Ray Trace(
 			intersections3.push_back(i.pos);
 		}
 
-		if (abs(i.pos.y) > F.h) break;
+		if (abs(i.pos.y) > F.sa) break;
 
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);
