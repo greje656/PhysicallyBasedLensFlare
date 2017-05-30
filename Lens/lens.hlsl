@@ -1,7 +1,9 @@
 cbuffer GlobalUniforms : register(b1) {
 	float time, g1, g2, spread;
 	float4 direction;
-	float4 backbuffer_size;
+	float2 backbuffer_size;
+	float aperture_resolution;
+	float padding;
 };
 
 struct PS_INPUT {
@@ -444,6 +446,14 @@ float4 PS( in PS_INPUT input ) : SV_Target {
 
 }
 
+float4 aperture_ps( float4 position : SV_POSITION ) : SV_Target {
+	float2 uv = position.xy / aperture_resolution;
+	float2 ndc = (uv - 0.5f) * 2.f;
+	float c = length(ndc) < 1.0f;
+
+	return float4(c ,c ,c, 1);
+}
+
 float3 ACESFilm( float3 x )
 {
     float a = 2.51f;
@@ -456,27 +466,6 @@ float3 ACESFilm( float3 x )
 
 float4 PSTM( float4 Pos : SV_POSITION ) : SV_Target {
 	float2 uv = Pos.xy / backbuffer_size;
-	/*
-	float s = (sin(time * 0.1) + 2) * 0.001;
-	float theta0 = acos(uv.x * 2.f - 1.f);
-	
-	float lambda1 = 475 * s;
-	float lambda2 = 570 * s;
-	float lambda3 = 600 * s;
-	float lambda0 = 550 * s;
-	
-	float n1 = 1.86074;
-	float n2 = 1.9; n2 = max(sqrt(n1*n2) , 1.38);
-	float n3 = 1.0;
-	float d1 = lambda0 / 4.f / n1;
-	//float R = FresnelAR(theta0, lambda, d1, n0, n1, n2) * 0.05;
-	float R = Reflectance(theta0, lambda1, d1, n1, n2, n3);
-	float G = Reflectance(theta0, lambda2, d1, n1, n2, n3);
-	float B = Reflectance(theta0, lambda3, d1, n1, n2, n3);
-
-	return float4(R, G, B, 1);
-	*/
-
 	float3 c = hdrTexture.Load(int3(Pos.xy,0)).rgb;
 	//c = ACESFilm(c);
 	return float4(c, 1);

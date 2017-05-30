@@ -206,6 +206,7 @@ int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
+float aperture_resolution = 512;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -349,6 +350,7 @@ ID3D11RenderTargetView*   g_pHDRView = nullptr;
 ID3D11ShaderResourceView* g_pShaderHDRView = nullptr;
 
 ID3D11BlendState*         g_pBlendStateBlend = NULL;
+ID3D11BlendState*         g_pBlendStateNoBlend = NULL;
 ID3D11BlendState*         g_pBlendStateMask = NULL;
 ID3D11BlendState*         g_pBlendStateAdd = NULL;
 ID3D11DepthStencilState*  g_pDepthStencilState = NULL;
@@ -359,7 +361,88 @@ ID3D11DepthStencilState*  g_pDepthStencilStateGreaterOrEqualRead = NULL;
 ID3D11RasterizerState*    g_pRasterStateNoCull = NULL;
 ID3D11RasterizerState*    g_pRasterStateCull = NULL;
 
+ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
+ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
+namespace Texture {
+
+	ID3D11Texture2D*          aperture = nullptr;
+	ID3D11RenderTargetView*   aperture_rt_view = nullptr;
+	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
+
+	ID3D11Texture2D*          aperture_depth_buffer = nullptr;
+	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
+
+	void InitializeTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
+		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view) {
+
+		HRESULT hr;
+
+		D3D11_TEXTURE2D_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Width = width;
+		desc.Height = height;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = format;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &texture);
+
+		// Create the HDR view
+		D3D11_RENDER_TARGET_VIEW_DESC rt_view_desc;
+		ZeroMemory(&rt_view_desc, sizeof(rt_view_desc));
+		rt_view_desc.Format = rt_view_desc.Format;
+		rt_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+		rt_view_desc.Texture2D.MipSlice = 0;
+		hr = g_pd3dDevice->CreateRenderTargetView(texture, &rt_view_desc, &rt_view);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC sr_view_desc;
+		ZeroMemory(&sr_view_desc, sizeof(sr_view_desc));
+		sr_view_desc.Format = desc.Format;
+		sr_view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		sr_view_desc.Texture2D.MostDetailedMip = 0;
+		sr_view_desc.Texture2D.MipLevels = 1;
+		hr = g_pd3dDevice->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
+	}
+
+	void InitializeDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
+
+		HRESULT hr;
+
+		// Create depth stencil texture
+		D3D11_TEXTURE2D_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Width = width;
+		desc.Height = height;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = 0;
+		hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &buffer);
+
+		// Create the depth stencil view
+		D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
+		ZeroMemory(&view_desc, sizeof(view_desc));
+		view_desc.Format = desc.Format;
+		view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		view_desc.Texture2D.MipSlice = 0;
+		hr = g_pd3dDevice->CreateDepthStencilView(buffer, &view_desc, &buffer_view);
+	}
+}
+
+namespace Shader {
+	ID3D11PixelShader* aperture_ps_shader;
+}
 //--------------------------------------------------------------------------------------
 // Forward declarations
 //--------------------------------------------------------------------------------------
@@ -953,41 +1036,9 @@ HRESULT InitDevice()
 	if (FAILED(hr))
 		return hr;
 
-	D3D11_TEXTURE2D_DESC descHDR;
-	ZeroMemory(&descHDR, sizeof(descHDR));
-	descHDR.Width = width;
-	descHDR.Height = height;
-	descHDR.MipLevels = 1;
-	descHDR.ArraySize = 1;
-	descHDR.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	descHDR.SampleDesc.Count = 1;
-	descHDR.SampleDesc.Quality = 0;
-	descHDR.Usage = D3D11_USAGE_DEFAULT;
-	descHDR.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-	descHDR.CPUAccessFlags = 0;
-	descHDR.MiscFlags = 0;
-	hr = g_pd3dDevice->CreateTexture2D(&descHDR, nullptr, &g_pHDRTexture);
-	if (FAILED(hr))
-		return hr;
-
-	// Create the HDR view
-	D3D11_RENDER_TARGET_VIEW_DESC descHDRV;
-	ZeroMemory(&descHDRV, sizeof(descHDRV));
-	descHDRV.Format = descHDR.Format;
-	descHDRV.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-	descHDRV.Texture2D.MipSlice = 0;
-	hr = g_pd3dDevice->CreateRenderTargetView(g_pHDRTexture, &descHDRV, &g_pHDRView);
-	if (FAILED(hr))
-		return hr;
-
-	D3D11_SHADER_RESOURCE_VIEW_DESC descShaderHDRV;
-	descShaderHDRV.Format = descHDR.Format;
-	descShaderHDRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	descShaderHDRV.Texture2D.MostDetailedMip = 0;
-	descShaderHDRV.Texture2D.MipLevels = 1;
-	hr = g_pd3dDevice->CreateShaderResourceView(g_pHDRTexture, &descShaderHDRV, &g_pShaderHDRView);
-	if (FAILED(hr))
-		return hr;
+	Texture::InitializeTexture(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, g_pHDRTexture, g_pShaderHDRView, g_pHDRView);
+	Texture::InitializeTexture(aperture_resolution, aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Texture::aperture, Texture::aperture_sr_view, Texture::aperture_rt_view);
+	Texture::InitializeDepthBuffer(aperture_resolution, aperture_resolution, Texture::aperture_depth_buffer, Texture::aperture_depth_buffer_view);
 
 	// Create a render target view
 	ID3D11Texture2D* pBackBuffer = nullptr;
@@ -1057,6 +1108,11 @@ HRESULT InitDevice()
 	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &g_pToneMapPixelShader);
 	blob->Release();
 
+	hr = CompileShaderFromFile(L"lens.hlsl", "aperture_ps", "ps_5_0", &blob);
+	hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shader::aperture_ps_shader);
+	blob->Release();
+
+	
 	D3D11_RASTERIZER_DESC rasterState;
 	ZeroMemory(&rasterState, sizeof(D3D11_RASTERIZER_DESC));
 	rasterState.FillMode = D3D11_FILL_SOLID;
@@ -1070,9 +1126,13 @@ HRESULT InitDevice()
 	D3D11_BLEND_DESC BlendState;
 	D3D11_BLEND_DESC MaskedBlendState;
 	D3D11_BLEND_DESC AdditiveBlendState;
+	D3D11_BLEND_DESC BlendStateNoBlend;
 	ZeroMemory(&BlendState, sizeof(D3D11_BLEND_DESC));
+	ZeroMemory(&BlendStateNoBlend, sizeof(D3D11_BLEND_DESC));
 	ZeroMemory(&MaskedBlendState, sizeof(D3D11_BLEND_DESC));
 	ZeroMemory(&AdditiveBlendState, sizeof(D3D11_BLEND_DESC));
+
+	BlendStateNoBlend.RenderTarget[0].BlendEnable = FALSE;
 
 	BlendState.RenderTarget[0].BlendEnable = TRUE;
 	BlendState.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
@@ -1096,6 +1156,7 @@ HRESULT InitDevice()
 	AdditiveBlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 
 	g_pd3dDevice->CreateBlendState(&BlendState, &g_pBlendStateBlend);
+	g_pd3dDevice->CreateBlendState(&BlendState, &g_pBlendStateNoBlend);
 	g_pd3dDevice->CreateBlendState(&MaskedBlendState, &g_pBlendStateMask);
 	g_pd3dDevice->CreateBlendState(&AdditiveBlendState, &g_pBlendStateAdd);
 	
@@ -1257,11 +1318,25 @@ void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangl
 	}
 }
 
-void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color) {
+void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rectangle, XMFLOAT4& color,
+	ID3D11RenderTargetView*& rt_view, ID3D11DepthStencilView*& depth_buffer_view) {
+
 	InstanceUniforms cb = { color, XMFLOAT4(0.f, 0.f, 0.f, 0.f) };
 	context->UpdateSubresource(g_InstanceUniforms, 0, nullptr, &cb, 0, 0);
+
+	context->RSSetState(g_pRasterStateCull);
+
+	context->OMSetBlendState(g_pBlendStateNoBlend, blendFactor, sampleMask);
+	context->OMSetDepthStencilState(g_pDepthStencilState, 0);
+	context->OMSetRenderTargets(1, &rt_view, depth_buffer_view);
+	context->ClearRenderTargetView(rt_view, XMVECTORF32{ 0, 0, 0, 0 });
+	context->ClearDepthStencilView(depth_buffer_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	context->IASetInputLayout(g_pVertexLayout2d);
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
+	context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+
 	context->Draw(6, 0);
 }
 
@@ -1543,10 +1618,18 @@ void Tick() {
 	GlobalUniforms cb = {
 		time, (float)ghost_bounce_1 , (float)ghost_bounce_2, rays_spread,
 		XMFLOAT4(direction.x, direction.y, direction.z, 0),
-		XMFLOAT4(backbuffer_width, backbuffer_height, 0, 0) };
+		XMFLOAT4(backbuffer_width, backbuffer_height, aperture_resolution, 0) };
 	g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 }
 
+void DrawAperture() {
+	g_pImmediateContext->VSSetShader(g_pVertexShader, nullptr, 0);
+	g_pImmediateContext->PSSetShader(Shader::aperture_ps_shader, nullptr, 0);
+	g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+	g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
+
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Texture::aperture_rt_view, Texture::aperture_depth_buffer_view);
+}
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
@@ -1554,10 +1637,9 @@ void Render() {
 	Tick();
 	AnimateRayDirection();
 
+	DrawAperture();
+
 	#if defined(DRAWLENSFLARE)
-		int pt = patch_tesselation - 1;
-		ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
-		ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
 
@@ -1606,6 +1688,7 @@ void Render() {
 			g_pImmediateContext->UpdateSubresource(g_GlobalUniforms, 0, nullptr, &cb, 0, 0);
 
 			#if defined(USE_COMPUTE)
+				int pt = patch_tesselation - 1;
 				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
 				g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
 				g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
@@ -1631,10 +1714,9 @@ void Render() {
 		g_pImmediateContext->PSSetConstantBuffers(0, 1, &g_InstanceUniforms);
 		g_pImmediateContext->PSSetShaderResources(1, 1, &g_pShaderHDRView);
 
-		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1);
+		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, g_pRenderTargetView, g_pDepthStencilView);
 
 		g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);
-
 
 	#else
 		if(!draw2d) {
@@ -1645,10 +1727,6 @@ void Render() {
 			g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
 			g_pImmediateContext->ClearDepthStencilView(g_pDepthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-			int pt = patch_tesselation - 1;
-			ID3D11ShaderResourceView* null_sr_view[1] = { NULL };
-			ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
-
 			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 
 			g_pImmediateContext->OMSetDepthStencilState(g_pDepthStencilState, 0);
@@ -1657,6 +1735,7 @@ void Render() {
 			g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
 			g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
 
+			int pt = patch_tesselation - 1;
 			#if defined(USE_COMPUTE)
 				g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		
@@ -1733,6 +1812,15 @@ void Render() {
 			DrawLensInterface(nikon_28_75mm_lens_interface);
 		}
 	#endif
+	
+	/*
+	// Visualize the aperture texture:
+	g_pImmediateContext->PSSetShader(g_pToneMapPixelShader, nullptr, 0);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+	g_pImmediateContext->PSSetShaderResources(1, 1, &Texture::aperture_sr_view);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, g_pRenderTargetView, g_pDepthStencilView);
+	g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);
+	*/
 
 	g_pSwapChain->Present(0, 0);
 	// SaveBackBuffer();
