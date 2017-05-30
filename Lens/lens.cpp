@@ -14,15 +14,7 @@
 #define DRAW2D
 //#define DRAWLENSFLARE
 
-#define USE_COMPUTE
-
 using namespace DirectX;
-
-#if defined(USE_COMPUTE)
-	#define INDICES_PER_PRIM 3
-#else
-	#define INDICES_PER_PRIM 6
-#endif
 
 //--------------------------------------------------------------------------------------
 // DEFAULT
@@ -733,46 +725,15 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 			int i2 = i1 + 1;
 			int i3 = i1 + subdiv;
 			int i4 = i2 + subdiv;
-			#if defined(USE_COMPUTE)
-				indices.push_back(i3);
-				indices.push_back(i1);
-				indices.push_back(i2);
 
-				indices.push_back(i2);
-				indices.push_back(i4);
-				indices.push_back(i3);
-			#else
-				int a4 = i3 - 1;
-				int a5 = i2 - subdiv;
-				int a6 = i3 + 1;
+			indices.push_back(i3);
+			indices.push_back(i1);
+			indices.push_back(i2);
 
-				if (a4 < 0) a4 = 0;
-				if (a5 < 0) a5 = 0;
-				if (a6 < 0) a6 = 0;
-
-				int b1 = i2 + 1;
-				int b2 = i3 + subdiv;
-				int b3 = i1;
-
-				if (b1 < 0) b1 = 0;
-				if (b2 < 0) b2 = 0;
-				if (b3 < 0) b3 = 0;
-
-				indices.push_back(i3);
-				indices.push_back(a4);
-				indices.push_back(i1);
-				indices.push_back(a5);
-				indices.push_back(i2);
-				indices.push_back(a6);
-
-				indices.push_back(i2);
-				indices.push_back(b1);
-				indices.push_back(i4);
-				indices.push_back(b2);
-				indices.push_back(i3);
-				indices.push_back(b3);
-			#endif
-
+			indices.push_back(i2);
+			indices.push_back(i4);
+			indices.push_back(i3);
+			
 			current_corner++;
 		}
 		current_corner++;
@@ -795,7 +756,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = INDICES_PER_PRIM * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1));
+	bd.ByteWidth = 3 * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1));
 	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
 	bd.CPUAccessFlags = 0;
 	ZeroMemory(&InitData, sizeof(InitData));
@@ -929,29 +890,18 @@ HRESULT InitDevice()
 									D3D11_SDK_VERSION, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext );
 		}
 
-		if( SUCCEEDED( hr ) )
+		if(SUCCEEDED(hr))
 			break;
 	}
-
-	if( FAILED( hr ) )
-		return hr;
 
 	// Obtain DXGI factory from device (since we used nullptr for pAdapter above)
 	IDXGIFactory1* dxgiFactory = nullptr;
 	IDXGIDevice* dxgiDevice = nullptr;
+	IDXGIAdapter* adapter = nullptr;
 	hr = g_pd3dDevice->QueryInterface( __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice) );
-	if (SUCCEEDED(hr)) {
-		IDXGIAdapter* adapter = nullptr;
-		hr = dxgiDevice->GetAdapter(&adapter);
-		if (SUCCEEDED(hr)) {
-			hr = adapter->GetParent( __uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory) );
-			adapter->Release();
-		}
-		dxgiDevice->Release();
-	}
-
-	if (FAILED(hr))
-		return hr;
+	hr = dxgiDevice->GetAdapter(&adapter);
+	hr = adapter->GetParent( __uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory) );
+	adapter->Release();
 
 	// Create swap chain
 	IDXGIFactory2* dxgiFactory2 = nullptr;
@@ -1000,11 +950,7 @@ HRESULT InitDevice()
 
 	// Note this tutorial doesn't handle full-screen swapchains so we block the ALT+ENTER shortcut
 	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
-
 	dxgiFactory->Release();
-
-	if (FAILED(hr))
-		return hr;
 
 	// Create depth stencil texture
 	D3D11_TEXTURE2D_DESC descDepth;
@@ -1035,8 +981,8 @@ HRESULT InitDevice()
 		return hr;
 
 	Texture::InitializeTexture(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, g_pHDRTexture, g_pShaderHDRView, g_pHDRView);
-	Texture::InitializeTexture(aperture_resolution, aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Texture::aperture, Texture::aperture_sr_view, Texture::aperture_rt_view);
-	Texture::InitializeDepthBuffer(aperture_resolution, aperture_resolution, Texture::aperture_depth_buffer, Texture::aperture_depth_buffer_view);
+	Texture::InitializeTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Texture::aperture, Texture::aperture_sr_view, Texture::aperture_rt_view);
+	Texture::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Texture::aperture_depth_buffer, Texture::aperture_depth_buffer_view);
 
 	// Create a render target view
 	ID3D11Texture2D* pBackBuffer = nullptr;
@@ -1601,21 +1547,14 @@ void Render() {
 		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalData);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
 
-		#if defined(USE_COMPUTE)
-			g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
-			g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
-			g_pImmediateContext->CSSetConstantBuffers(2, 1, &g_GhostData);
-			g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
-		#else
-			g_pImmediateContext->VSSetShader(g_pFlareVertexShader, nullptr, 0);
-			g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_patch.vs_vertices, &stride, &offset);
-		#endif
+		g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
+		g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
+		g_pImmediateContext->CSSetConstantBuffers(2, 1, &g_GhostData);
+		g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
 		
 		int bounce1 = 2;
 		int bounce2 = 1;
-
 		while (true) {
-
 			if (bounce1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
 				bounce2++;
 				bounce1 = bounce2 + 1;
@@ -1634,7 +1573,7 @@ void Render() {
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 
 			bounce1++;
@@ -1689,7 +1628,7 @@ void Render() {
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * INDICES_PER_PRIM * 2, 0, 0);
+			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
 		} else {
 			g_pImmediateContext->RSSetState(g_pRasterStateCull);
