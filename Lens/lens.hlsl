@@ -302,7 +302,7 @@ PSInput getTraceResult(float2 ndc){
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
-	int2 pos = gid * NUM_THREADS + gtid;
+	int2 pos = gid.xy * NUM_THREADS + gtid.xy;
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
@@ -362,7 +362,16 @@ float3 ACESFilm(float3 x) {
 }
 
 float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
+	float2 uv = pos.xy / backbuffer_size;
 	float3 c = hdr_texture.Load(int3(pos.xy,0)).rgb;
 	//c = ACESFilm(c);
 	return float4(c, 1);
+}
+
+float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
+	float2 uv = pos.xy / 1;//aperture_resolution;
+	float2 ndc = (uv - 0.5f) * 2.f;
+	float c = length(ndc) < 1.0f;
+
+	return float4(c ,c ,c, 1);
 }
