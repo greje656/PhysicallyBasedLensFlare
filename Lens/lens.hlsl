@@ -373,9 +373,27 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 }
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
+
 	float2 uv = pos.xy / aperture_resolution;
-	float2 ndc = (uv - 0.5f) * 2.f;
-	float c = length(ndc) < 1.0f;
+	float2 ndc = ((uv - 0.5f) * 2.f);
+
+	int num_blades = 9;// + time * 0.01f;
+	float shutter = (sin(time * 0.1) + 1.f) * 0.5f;
+	float angle_offset = shutter * 2;
+
+	float signed_distance = 0.f;
+	for(int i = 0; i < num_blades; ++i) {
+		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
+		float2 axis = float2(cos(angle), sin(angle));
+		signed_distance = max(signed_distance, dot(axis, ndc));
+	}
+
+	float l = lerp(0.1, 0.69, shutter);
+	float u = l + 0.001;
+	float s = u - l;
+	float c = 1.f - saturate(saturate(signed_distance - l)/s);
+	
+	c = smoothstep(0, 1, c);
 
 	return float4(c ,c ,c, 1);
 }

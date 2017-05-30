@@ -154,7 +154,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 1.38 },
 	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 1.38 },
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f,  5.0f, 1.38 },
+	{       0.0f,     dAp, 1.00000f, true,  18.f, 15.0f, 1.38 },
 
 	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 1.38 },
 
@@ -208,7 +208,7 @@ float total_lens_distance = 0.f;
 
 float time         = (float)ghost_bounce_1;
 float speed        = 0.1f;
-float rays_spread  = 5.0f;
+float rays_spread  = 1.0f;
 
 bool left_mouse_down = false;
 bool spacebar_down = false;
@@ -1700,7 +1700,6 @@ void Render() {
 		}
 	#endif
 	
-	
 	// Visualize the aperture texture:
 	/*
 	g_pImmediateContext->PSSetShader(g_pToneMapPixelShader, nullptr, 0);
@@ -1709,7 +1708,6 @@ void Render() {
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, g_pRenderTargetView, g_pDepthStencilView);
 	g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);
 	*/
-
 	g_pSwapChain->Present(0, 0);
 	// SaveBackBuffer();
 }
