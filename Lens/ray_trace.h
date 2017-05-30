@@ -12,7 +12,6 @@
 
 using namespace std;
 
-#define NUM_INTERFACE 1
 #define NUM_BOUNCE 2
 #define AP_IDX 14
 #define PI 3.14159265359f
@@ -92,9 +91,6 @@ vec3 refract(vec3 i, vec3 n, float eta) {
 float length_xy(vec3& v) {
 	return sqrt(v.x * v.x + v.y * v.y);
 }
-
-int2 BOUNCE[NUM_BOUNCE];
-int LENGTH[NUM_BOUNCE];
 
 Intersection testFLAT(Ray r, LensInterface F) {
 	Intersection i;

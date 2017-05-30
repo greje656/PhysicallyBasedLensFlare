@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -82,6 +82,12 @@ struct InstanceUniforms {
 struct GlobalData {
 	float time;
 	float spread;
+	float plate_size;
+
+	float aperture_id;
+	float num_interfaces;
+	float aperture_resolution;
+
 	XMFLOAT2 backbuffer_size;
 	XMFLOAT4 direction;
 };
@@ -124,6 +130,7 @@ const float d14 =  1.532f;
 const float dAp =  2.800f;
 const float d20 = 16.889f;
 const float Bf  = 39.683f;
+const int aperture_id = 14;
 
 std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 1.38 },
@@ -1509,7 +1516,19 @@ void UpdateGlobals() {
 		direction = normalize(vec3(0, y_dir, -1.f));
 	#endif
 
-	GlobalData cb = { time, rays_spread, XMFLOAT2(backbuffer_width, backbuffer_height), XMFLOAT4(direction.x, direction.y, direction.z, 0) };
+	GlobalData cb = {
+		time,
+		rays_spread,
+		nikon_28_75mm_lens_interface[nikon_28_75mm_lens_interface.size() - 1].sa,
+
+		aperture_id,
+		(float)nikon_28_75mm_lens_interface.size(),
+		aperture_resolution,
+
+		XMFLOAT2(backbuffer_width, backbuffer_height),
+		XMFLOAT4(direction.x, direction.y, direction.z, 0)
+	};
+
 	g_pImmediateContext->UpdateSubresource(g_GlobalData, 0, nullptr, &cb, 0, 0);
 }
 
@@ -1525,8 +1544,8 @@ void DrawAperture() {
 // Render a frame
 //--------------------------------------------------------------------------------------
 void Render() {
-	UpdateGlobals();
 
+	UpdateGlobals();
 	DrawAperture();
 
 	#if defined(DRAWLENSFLARE)
@@ -1543,14 +1562,15 @@ void Render() {
 		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
+		g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
 		g_pImmediateContext->VSSetConstantBuffers(1, 1, &g_GlobalData);
+
+		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
 
 		g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
 		g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
 		g_pImmediateContext->CSSetConstantBuffers(2, 1, &g_GhostData);
-		g_pImmediateContext->VSSetShader(g_pFlareVertexShaderCompute, nullptr, 0);
 		
 		int bounce1 = 2;
 		int bounce2 = 1;
@@ -1564,7 +1584,7 @@ void Render() {
 				break;
 			}
 
-			GhostData cb = { XMFLOAT4(bounce1, bounce2, 0, 0) };
+			GhostData cb = { XMFLOAT4((float)bounce1, (float)bounce2, 0, 0) };
 			g_pImmediateContext->UpdateSubresource(g_GhostData, 0, nullptr, &cb, 0, 0);
 
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
@@ -1680,10 +1700,11 @@ void Render() {
 		}
 	#endif
 	
-	/*
+	
 	// Visualize the aperture texture:
+	/*
 	g_pImmediateContext->PSSetShader(g_pToneMapPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalUniforms);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
 	g_pImmediateContext->PSSetShaderResources(1, 1, &Texture::aperture_sr_view);
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, g_pRenderTargetView, g_pDepthStencilView);
 	g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);

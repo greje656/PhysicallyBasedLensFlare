@@ -3,8 +3,6 @@
 #define NUM_THREADS 32
 
 #define AP_IDX 14
-#define PLATE_SIZE 10.f
-#define NUM_INTERFACE 29
 #define PATCH_TESSELATION 32
 
 struct PSInput {
@@ -24,10 +22,8 @@ struct Intersection {
 struct LensInterface {
 	float3 center;
 	float radius;
-
 	float3 n;
 	float sa;
-
 	float d1;
 	float flat;
 	float pos;
@@ -40,10 +36,17 @@ struct Ray {
 	float4 tex;
 };
 
+// Constant buffers
 cbuffer GlobalData : register(b1) {
 	float time;
 	float spread;
+	float plate_size;
+	float aperture_id;
+
+	float num_interfaces;
+	float aperture_resolution;
 	float2 backbuffer_size;
+
 	float4 light_dir;
 };
 
@@ -52,6 +55,7 @@ cbuffer GhostData : register(b2) {
 	float bounce2;
 };
 
+// Bounded buffers
 Texture2D hdr_texture : register(t1);
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
@@ -133,7 +137,7 @@ float Reflectance(float lambda, float d, float theta1, float n1, float n2, float
 
 Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
-	int LEN = bounce_pair.x + (bounce_pair.x - bounce_pair.y) + (NUM_INTERFACE - bounce_pair.y) - 1;
+	int LEN = bounce_pair.x + (bounce_pair.x - bounce_pair.y) + (num_interfaces - bounce_pair.y) - 1;
 	int PHASE = 0;
 	int DELTA = 1;
 	int T = 1;
@@ -148,9 +152,9 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 		Intersection i;
 		if(F.flat)
-			i = TestFlat(r,lens_interface[T]);
+			i = TestFlat(r, lens_interface[T]);
 		else 
-			i = TestSphere(r,lens_interface[T]);
+			i = TestSphere(r, lens_interface[T]);
 
 		[branch]
 		if (!i.hit){
@@ -323,7 +327,7 @@ PSInput VS(uint id : SV_VertexID) {
 	PSInput vertex  = vertices_buffer[id];
 	
 	float ratio = backbuffer_size.x / backbuffer_size.y;
-	float scale = 1.f / PLATE_SIZE;
+	float scale = 1.f / plate_size;
 	vertex.pos.xy *= scale * float2(1.f, ratio);
 	vertex.pos.w = 1;
 	
@@ -369,7 +373,7 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 }
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
-	float2 uv = pos.xy / 1;//aperture_resolution;
+	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = (uv - 0.5f) * 2.f;
 	float c = length(ndc) < 1.0f;
 
