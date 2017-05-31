@@ -102,37 +102,16 @@ Intersection TestSphere(Ray r, LensInterface F) {
 
 float Reflectance(float lambda, float d, float theta1, float n1, float n2, float n3) {
 
-	// Apply Snell's law to get the other angles
-	float theta2 = asin(n1 * sin(theta1) / n2);
-	float theta3 = asin(n1 * sin(theta1) / n3);
+	float ni = n1;
+	float nt = n3;
 
-	float cos1 = cos(theta1);
-	float cos2 = cos(theta2);
-	float cos3 = cos(theta3);
+	float Oi = theta1;
+	float Ot = asin((ni/nt) * sin(Oi));
 
-	float beta = (2.0f * PI) / lambda * n2 * d * cos2;
+	float Rs = ( ni*cos(Oi) - nt*cos(Ot) ) / ( ni*cos(Oi) + nt*cos(Ot) );
+	float Rp = ( ni*cos(Ot) - nt*cos(Oi) ) / ( ni*cos(Ot) + nt*cos(Oi) );
 
-	// Compute the fresnel terms for the first and second interfaces for both s and p polarized
-	// light
-	float r12p = (n2 * cos1 - n1 * cos2) / (n2 * cos1 + n1 * cos2);
-	float r12p2 = r12p * r12p;
-
-	float r23p = (n3 * cos2 - n2 * cos3) / (n3 * cos2 + n2 * cos3);
-	float r23p2 = r23p * r23p;
-
-	float rp = (r12p2 + r23p2 + 2.0f * r12p * r23p * cos(2.0f * beta)) /
-		(1.0f + r12p2 * r23p2 + 2.0f * r12p * r23p * cos(2.0f * beta));
-
-	float r12s = (n1 * cos1 - n2 * cos2) / (n1 * cos1 + n2 * cos2);
-	float r12s2 = r12s * r12s;
-
-	float r23s = (n2 * cos2 - n3 * cos3) / (n2 * cos2 + n3 * cos3);
-	float r23s2 = r23s * r23s;
-
-	float rs = (r12s2 + r23s2 + 2.0f * r12s * r23s * cos(2.0f * beta)) /
-		(1.0f + r12s2 * r23s2 + 2.0f * r12s * r23s * cos(2.0f * beta));
-
-	return (rs + rp) * 0.5f;
+	return (Rs + Rp) * 0.5;
 }
 
 Ray Trace(Ray r, float lambda, int2 bounce_pair) {
@@ -334,6 +313,54 @@ PSInput VS(uint id : SV_VertexID) {
 	return vertex;
 }
 
+float3 TemperatureToColor(float t) {
+	float4 temperature_color_map[25] = {
+		float4(    0.0, 0.000, 0.000, 0.000),
+		float4( 1000.0, 1.000, 0.007, 0.000),
+		float4( 1500.0, 1.000, 0.126, 0.000),
+		float4( 2000.0, 1.000, 0.234, 0.010),
+		float4( 2500.0, 1.000, 0.349, 0.067),
+		float4( 3000.0, 1.000, 0.454, 0.151),
+		float4( 3500.0, 1.000, 0.549, 0.254),
+		float4( 4000.0, 1.000, 0.635, 0.370),
+		float4( 4500.0, 1.000, 0.710, 0.493),
+		float4( 5000.0, 1.000, 0.778, 0.620),
+		float4( 5500.0, 1.000, 0.837, 0.746),
+		float4( 6000.0, 1.000, 0.890, 0.869),
+		float4( 6500.0, 1.000, 0.937, 0.988),
+		float4( 7000.0, 0.907, 0.888, 1.000),
+		float4( 7500.0, 0.827, 0.839, 1.000),
+		float4( 8000.0, 0.762, 0.800, 1.000),
+		float4( 8500.0, 0.711, 0.766, 1.000),
+		float4( 9000.0, 0.668, 0.738, 1.000),
+		float4( 9500.0, 0.632, 0.714, 1.000),
+		float4(10000.0, 0.602, 0.693, 1.000),
+		float4(12000.0, 0.518, 0.632, 1.000),
+		float4(14000.0, 0.468, 0.593, 1.000),
+		float4(16000.0, 0.435, 0.567, 1.000),
+		float4(18000.0, 0.411, 0.547, 1.000),
+		float4(20000.0, 0.394, 0.533, 1.000)
+	};
+
+	int index;
+	for(int i=0; i < 25; ++i){
+		if(t < temperature_color_map[i].x) {
+			index = i;
+			break;
+		}
+	}
+
+	[branch]
+	if(index > 0) {
+		float4 lower = temperature_color_map[index - 1];
+		float4 upper = temperature_color_map[index];
+		float l = (t - lower.x)/(upper.x - lower.x);
+		return lerp(lower.yzw, upper.yzw, l);
+	} else {
+		return 0;
+	}
+}
+
 // Pixel Shader
 // ----------------------------------------------------------------------------------
 float4 PS(in PSInput input) : SV_Target {
@@ -351,7 +378,7 @@ float4 PS(in PSInput input) : SV_Target {
 	if(alpha == 0.f)
 		discard;
 
-	float3 v = alpha * float3(232, 127, 61)/255.f;
+	float3 v = alpha * TemperatureToColor(8000);
 	
 	return float4(v, 1.f);
 }
@@ -368,7 +395,7 @@ float3 ACESFilm(float3 x) {
 float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / backbuffer_size;
 	float3 c = hdr_texture.Load(int3(pos.xy,0)).rgb;
-	//c = ACESFilm(c);
+	c = ACESFilm(c);
 	return float4(c, 1);
 }
 
