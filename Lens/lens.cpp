@@ -243,12 +243,6 @@ void SaveBackBuffer() {
 }
 #endif
 
-ULONGLONG TimeToTick(int t) {
-	return (ULONGLONG)(t * 0.5f * 1000.0f * speed);
-}
-
-ULONGLONG timer_start = (ULONGLONG)GetTickCount64() - TimeToTick(ghost_bounce_1);
-
 INT sampleMask = 0x0F;
 UINT offset = 0;
 UINT stride = sizeof(SimpleVertex);
