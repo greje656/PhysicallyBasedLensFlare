@@ -122,6 +122,7 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 	int T = 1;
 
 	int k;
+	[loop]
 	for(k=0; k < LEN; k++, T += DELTA) {
 		
 		LensInterface F = lens_interface[T];
@@ -135,14 +136,12 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 		else 
 			i = TestSphere(r, lens_interface[T]);
 
-		[branch]
 		if (!i.hit){
 			r.pos = i.pos;
 			break; // exit upon miss
 		}
 
 		// record texture coord . or max. rel . radius
-		[branch]
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length(i.pos.xy) / F.sa);
 		else if(T==AP_IDX) // iris aperture plane
@@ -350,7 +349,6 @@ float3 TemperatureToColor(float t) {
 		}
 	}
 
-	[branch]
 	if(index > 0) {
 		float4 lower = temperature_color_map[index - 1];
 		float4 upper = temperature_color_map[index];
