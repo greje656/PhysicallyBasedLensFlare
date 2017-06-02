@@ -200,7 +200,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
-float coating_quality = 0.2;
+float coating_quality = 0;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -1584,7 +1584,7 @@ void Render() {
 
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
 			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &g_LensInterfaceResourceView, nullptr);
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
