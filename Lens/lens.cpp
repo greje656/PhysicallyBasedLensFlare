@@ -200,6 +200,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
+float coating_quality = 0.2;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -1520,7 +1521,7 @@ void UpdateGlobals() {
 		aperture_resolution,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
-		XMFLOAT4(direction.x, direction.y, direction.z, 0)
+		XMFLOAT4(direction.x, direction.y, direction.z, coating_quality)
 	};
 
 	g_pImmediateContext->UpdateSubresource(g_GlobalData, 0, nullptr, &cb, 0, 0);

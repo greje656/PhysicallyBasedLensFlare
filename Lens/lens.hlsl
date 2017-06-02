@@ -48,7 +48,8 @@ cbuffer GlobalData : register(b1) {
 	float aperture_resolution;
 	float2 backbuffer_size;
 
-	float4 light_dir;
+	float3 light_dir;
+	float coating_quality;
 };
 
 cbuffer GhostData : register(b2) {
@@ -187,7 +188,7 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 		// do reflection / refraction for spher . surfaces
 		float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
-		float n1 = F.n.y;
+		// float n1 = F.n.y;
 		float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
 
 		if (!bReflect) { // refraction
@@ -197,19 +198,16 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 		} else { // reflection with AR Coating
 			r.dir = reflect(r.dir,i.norm);
 
-			float _n0 = n0;
-			float _n2 = n2;
-			float _n1 = max(sqrt(n0*n2) , 1.38);
-
+			float n1 = max(sqrt(n0*n2) , 1.38 + coating_quality);
 			float d1 = (F.d1 * NANO_METER);
-
-			float R = FresnelAR(i.theta + 0.0001, lambda, d1, _n0, _n1, _n2);
+			float R = FresnelAR(i.theta + 0.0001, lambda, d1, n0, n1, n2);
 			//R = saturate(R);
 
 			r.tex.a *= R; // update ray intensity
 		}
 	}
 
+	[branch]
 	if (k<LEN)
 		r.tex.a = 0; // early-exit rays = invalid
 	
@@ -410,7 +408,7 @@ float4 PS(in PSInput input) : SV_Target {
 	if(alpha == 0.f)
 		discard;
 
-	float3 v = alpha * input.reflectance * TemperatureToColor(8000);
+	float3 v = alpha * input.reflectance * TemperatureToColor(10000);
 	
 	return float4(v, 1.f);
 }
