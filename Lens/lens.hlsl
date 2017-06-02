@@ -29,11 +29,6 @@ struct LensInterface {
 	float flat;
 	float pos;
 	float w;
-
-	float reflectance;
-	float pad1;
-	float pad2;
-	float pad3;
 };
 
 struct Ray {	
@@ -120,38 +115,30 @@ float Reflectance(float lambda, float d, float theta1, float n1, float n2, float
 	return (Rs + Rp) * 0.5;
 }
 
-float FresnelAR2 (
-	float theta0, // a n g l e o f i n c i d e n c e
-	float lambda , // w a v el e n gt h o f r a y
-	float d1 , // t h i c k n e s s o f AR c o a t i n g
-	float n0 , // RI ( r e f r . i n d e x ) o f 1 s t medium
-	float n1 , // RI o f c o a t i n g l a y e r
-	float n2 // RI o f t h e 2nd medium
-) {
-	// r e f r a c t i o n a n g l e s i n c o a t i n g and t h e 2nd medium
-	float theta1 = asin(sin(theta0) *n0 / n1) ;
-	float theta2 = asin(sin(theta0) *n0 / n2) ;
-	// a m p l i t u d e f o r o u t e r r e f l . / t r a n s m i s s i o n on ←-
-	float rs01 = -sin(theta0-theta1) / sin(theta0+theta1) ;
-	float rp01 = tan(theta0-theta1) / tan(theta0+theta1) ;
-	float ts01 = 2*sin(theta1) *cos(theta0) / sin(theta0+theta1) ;
-	float tp01 = ts01*cos(theta0-theta1) ;
-	// a m p l i t u d e f o r i n n e r r e f l e c t i o n
-	float rs12 = -sin(theta1-theta2) / sin(theta1+theta2) ;
-	float rp12 = +tan(theta1-theta2) / tan(theta1+theta2) ;
-	// a f t e r p a s s i n g t h r o u g h f i r s t s u r f a c e t w i c e :
-	// 2 t r a n s m i s s i o n s and 1 r e f l e c t i o n
-	float ris = ts01*ts01*rs12 ;
-	float rip = tp01*tp01*rp12 ;
-	// p h a s e d i f f e r e n c e betwee n o u t e r and i n n e r ←-
+float FresnelAR (float theta0, float lambda, float d1, float n0, float n1, float n2) {
+	float theta1 = asin(sin(theta0) *n0 / n1);
+	float theta2 = asin(sin(theta0) *n0 / n2);
+
+	float rs01 = -sin(theta0-theta1) / sin(theta0+theta1);
+	float rp01 = tan(theta0-theta1) / tan(theta0+theta1);
+	float ts01 = 2*sin(theta1) *cos(theta0) / sin(theta0+theta1);
+	float tp01 = ts01*cos(theta0-theta1);
+
+	float rs12 = -sin(theta1-theta2) / sin(theta1+theta2);
+	float rp12 = +tan(theta1-theta2) / tan(theta1+theta2);
+
+	float ris = ts01*ts01*rs12;
+	float rip = tp01*tp01*rp12;
+
 	float dy = d1*n1 ;
-	float dx = tan(theta1) *dy ;
-	float delay = sqrt(dx*dx+dy*dy) ;
-	float relPhase = 4*PI / lambda*(delay-dx*sin(theta0) ) ;
-	// Add up s i n e s o f d i f f e r e n t p h a s e and a m p l i t u d e
-	float out_s2 = rs01*rs01 + ris*ris + 2*rs01*ris*cos(relPhase) ;
-	float out_p2 = rp01*rp01 + rip*rip + 2*rp01*rip*cos(relPhase) ;
-	return (out_s2+out_p2) / 2 ; // r e f l e c t i v i t y
+	float dx = tan(theta1) *dy;
+	float delay = sqrt(dx*dx+dy*dy);
+	float relPhase = 4*PI / lambda*(delay-dx*sin(theta0) );
+
+	float out_s2 = rs01*rs01 + ris*ris + 2*rs01*ris*cos(relPhase);
+	float out_p2 = rp01*rp01 + rip*rip + 2*rp01*rip*cos(relPhase);
+
+	return (out_s2+out_p2) / 2 ;
 }
 
 
@@ -212,11 +199,11 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 			float _n0 = n0;
 			float _n2 = n2;
-			float _n1 = max(sqrt(n0*n2) , lens_interface[T].n.y);
+			float _n1 = max(sqrt(n0*n2) , 1.38);
 
-			float d1 = (F.reflectance.x * NANO_METER);
+			float d1 = (F.d1 * NANO_METER);
 
-			float R = FresnelAR2(i.theta + 0.001, lambda, d1, _n0, _n1, _n2);
+			float R = FresnelAR(i.theta + 0.0001, lambda, d1, _n0, _n1, _n2);
 			//R = saturate(R);
 
 			r.tex.a *= R; // update ray intensity
@@ -442,26 +429,8 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / backbuffer_size;
 
 	float3 c = hdr_texture.Load(int3(pos.xy,0)).rgb;
-    c = ACESFilm(c);
-    return float4(c, 1);
-
-    float theta0 = acos(uv.x);
-    float lambda0 = 300 * NANO_METER;
-    float lambda1 = 500 * NANO_METER;
-    float lambda2 = 850 * NANO_METER;
-    float n0 = 1.0;
-    float n2 = 2.8;
-    float n1 = lerp(1.8, 3.2, uv.y);//max(sqrt(n0*n2) , 1.38);
-
-    float d1 = (96.4 - time)* NANO_METER;//(532 * NANO_METER) / (4.f * n1);
-    float R = FresnelAR2(theta0, lambda0, d1, n0, n1, n2);
-    float G = FresnelAR2(theta0, lambda1, d1, n0, n1, n2);
-    float B = FresnelAR2(theta0, lambda2, d1, n0, n1, n2);
-
-    //float3 C = normalize(float3(R,G,B));
-    float3 C = normalize(float3(R,G,B));
-
-    return float4(C, 1);
+	c = ACESFilm(c);
+	return float4(c, 1);
 }
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
