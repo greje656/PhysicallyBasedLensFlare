@@ -50,6 +50,12 @@ struct LensInterface {
 	float flat;
 	float pos;
 	float w;
+
+	float wavelength;
+	float pad1;
+	float pad2;
+	float pad3;
+
 };
 
 struct Ray {
