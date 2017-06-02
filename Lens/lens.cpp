@@ -154,7 +154,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 }, 
 	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 }, 
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f, 15.0f, 440 }, 
+	{       0.0f,     dAp, 1.00000f, true,  18.f, 10.0f, 440 }, 
 
 	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 }, 
 
@@ -200,7 +200,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
-float coating_quality = 0;
+float coating_quality = 0.0;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -362,6 +362,19 @@ namespace Texture {
 
 	ID3D11Texture2D*          aperture_depth_buffer = nullptr;
 	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
+
+	ID3D11SamplerState*       linear_sampler_state = nullptr;
+
+	void InitializeSamplers() {
+		D3D11_SAMPLER_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+		g_pd3dDevice->CreateSamplerState(&desc, &Texture::linear_sampler_state);
+	}
 
 	void InitializeTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
 		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view) {
@@ -985,6 +998,7 @@ HRESULT InitDevice()
 	Texture::InitializeTexture(width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, g_pHDRTexture, g_pShaderHDRView, g_pHDRView);
 	Texture::InitializeTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Texture::aperture, Texture::aperture_sr_view, Texture::aperture_rt_view);
 	Texture::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Texture::aperture_depth_buffer, Texture::aperture_depth_buffer_view);
+	Texture::InitializeSamplers();
 
 	// Create a render target view
 	ID3D11Texture2D* pBackBuffer = nullptr;
@@ -1562,6 +1576,8 @@ void Render() {
 
 		g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
+		g_pImmediateContext->PSSetShaderResources(1, 1, &Texture::aperture_sr_view);
+		g_pImmediateContext->PSSetSamplers(0, 1, &Texture::linear_sampler_state);
 
 		g_pImmediateContext->CSSetShader(g_pComputeShader, nullptr, 0);
 		g_pImmediateContext->CSSetConstantBuffers(1, 1, &g_GlobalData);
@@ -1636,15 +1652,19 @@ void Render() {
 
 			g_pImmediateContext->PSSetShader(g_pFlarePixelShader, nullptr, 0);
 			g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
-	
+			g_pImmediateContext->PSSetShaderResources(1, 1, &Texture::aperture_sr_view);
+			g_pImmediateContext->PSSetSamplers(0, 1, &Texture::linear_sampler_state);
+
 			// Dispatch
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, null_ua_view, nullptr);
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			g_pImmediateContext->VSSetShaderResources(0, 1, null_sr_view);
+			g_pImmediateContext->PSSetShaderResources(1, 1, null_sr_view);
+
 		} else {
 			g_pImmediateContext->RSSetState(g_pRasterStateCull);
 			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
