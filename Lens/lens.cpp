@@ -120,7 +120,6 @@ namespace LensShapes {
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
-
 std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
 const float d6  = 53.142f;
@@ -182,20 +181,17 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 int patch_tesselation = 32;
 int num_threads = patch_tesselation;
 int num_groups = patch_tesselation / num_threads;
-
 int num_of_rays = patch_tesselation;
 int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
-
 int ghost_bounce_1 = 21;
 int ghost_bounce_2 = 10;
-
 int num_of_intersections_1 = num_of_lens_components;
 int num_of_intersections_2 = num_of_lens_components;
 int num_of_intersections_3 = num_of_lens_components;
-
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
 int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
+
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
@@ -205,18 +201,22 @@ float min_ior = 1000.f;
 float max_ior = -1000.f;
 float global_scale = 0.009;
 float total_lens_distance = 0.f;
-
-float time         = (float)ghost_bounce_1;
-float speed        = 0.1f;
-float rays_spread  = 1.0f;
+float time  = (float)ghost_bounce_1;
+float speed = 0.1f;
+float rays_spread = 1.0f;
+float x_dir = 0.f;
+float y_dir = 0.f;
 
 bool left_mouse_down = false;
 bool spacebar_down = false;
 bool draw2d = true;
-float x_dir = 0.f;
-float y_dir = 0.f;
 
 vec3 direction( 0.f, 0.f,-1.f);
+
+INT sampleMask = 0x0F;
+UINT offset = 0;
+UINT stride = sizeof(SimpleVertex);
+float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
@@ -242,11 +242,6 @@ void SaveBackBuffer() {
 	SaveToTGAFile(*image, finle_name.str().c_str());
 }
 #endif
-
-INT sampleMask = 0x0F;
-UINT offset = 0;
-UINT stride = sizeof(SimpleVertex);
-float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
 XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 rgb = c;
@@ -321,11 +316,9 @@ namespace Views {
 	ID3D11DepthStencilView*    depthStencilView = nullptr;
 	ID3D11RenderTargetView*    renderTargetView = nullptr;
 	ID3D11RenderTargetView*    HDRView = nullptr;
-
 }
 
 namespace Textures {
-
 	ID3D11Texture2D*          depthStencil = nullptr;
 	ID3D11Texture2D*          HDRTexture = nullptr;
 	ID3D11Texture2D*          aperture = nullptr;
