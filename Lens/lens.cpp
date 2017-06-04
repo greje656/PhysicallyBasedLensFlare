@@ -11,7 +11,7 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//a#define DRAW2D
+//#define DRAW2D
 #define DRAWLENSFLARE
 
 using namespace DirectX;
@@ -60,7 +60,7 @@ struct PatentFormat {
 	bool flat;
 	float w;
 	float h;
-	float lambda;
+	float coating_thickness;
 };
 
 struct SimpleVertex {
@@ -71,6 +71,7 @@ struct PS_INPUT {
 	XMFLOAT4 position;
 	XMFLOAT4 texture;
 	XMFLOAT4 mask;
+	XMFLOAT4 ref;
 };
 
 struct InstanceUniforms {
@@ -82,7 +83,6 @@ struct GlobalData {
 	float time;
 	float spread;
 	float plate_size;
-
 	float aperture_id;
 	float num_interfaces;
 	float aperture_resolution;
@@ -132,51 +132,51 @@ const float Bf  = 39.683f;
 const int aperture_id = 14;
 
 std::vector<PatentFormat> nikon_28_75mm_lens_components = {
-	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 1.38 },
-	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 1.38 },
+	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 530 },
+	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 600 }, 
 
-	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f, 1.38 },
-	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f, 1.38 },
+	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f, 570 }, 
+	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f, 660 }, 
 
-	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f, 1.38 },
-	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f, 1.38 },
+	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f, 330 }, 
+	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f, 544 }, 
 
-	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f, 1.38 },
-	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f, 1.38 },
+	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f, 740 }, 
+	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f, 411 }, 
 
-	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f, 1.38 },
-	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f, 1.38 },
+	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f, 580 }, 
+	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f, 730 }, 
 
-	{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f, 1.38 },
-	{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f, 1.38 },
+	{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f, 700 }, 
+	{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f, 440 }, 
 
-	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 1.38 },
-	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 1.38 },
+	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 }, 
+	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 }, 
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f, 15.0f, 1.38 },
+	{       0.0f,     dAp, 1.00000f, true,  18.f, 10.0f, 440 }, 
 
-	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 1.38 },
+	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 }, 
 
-	{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f, 1.38 },
-	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f, 1.38 },
+	{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f, 770 }, 
+	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f, 820 }, 
 
-	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f, 1.38 },
+	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f, 200 }, 
 
-	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f, 1.38 },
-	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f, 1.38 },
+	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f, 540 }, 
+	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f, 580 }, 
 
-	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f, 1.38 },
+	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f, 533 }, 
 
-	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f, 1.38 },
-	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f, 1.38 },
+	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f, 666 }, 
+	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f, 500 }, 
 
-	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f, 1.38 },
-	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f, 1.38 },
+	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f, 487 }, 
+	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f, 671 }, 
 
-	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f, 1.38 },
-	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f, 1.38 },
+	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f, 487 }, 
+	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f, 732 }, 
 
-	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 1.38 }
+	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
 };
 
 int patch_tesselation = 32;
@@ -199,6 +199,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
+float coating_quality = 0.0;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -333,6 +334,20 @@ namespace Textures {
 	ID3D11RenderTargetView*   aperture_rt_view = nullptr;
 	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
 	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
+
+	ID3D11SamplerState*       linear_sampler_state = nullptr;
+
+	void InitializeSamplers() {
+		D3D11_SAMPLER_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_sampler_state);
+	}
+	
 
 	void initTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
 		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view) {
@@ -1011,7 +1026,7 @@ void ParseLensComponents() {
 		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
 		vec3 n = { left_ior, 1.f, right_ior };
 
-		LensInterface component = { center, entry.r, n, entry.h, entry.lambda, (float)entry.flat, total_lens_distance, entry.w };
+		LensInterface component = { center, entry.r, n, entry.h, entry.coating_thickness, (float)entry.flat, total_lens_distance, entry.w };
 		nikon_28_75mm_lens_interface[i] = component;
 	}
 
@@ -1142,10 +1157,6 @@ HRESULT InitDevice()
 		hr = dxgiFactory->CreateSwapChain( g_pd3dDevice, &sd, &g_pSwapChain );
 	}
 
-	// Note this tutorial doesn't handle full-screen swapchains so we block the ALT+ENTER shortcut
-	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
-	dxgiFactory->Release();
-
 	// Setup the viewport
 	D3D11_VIEWPORT vp;
 	vp.Width = (FLOAT)width;
@@ -1154,11 +1165,14 @@ HRESULT InitDevice()
 	vp.MaxDepth = 1.f;
 	vp.TopLeftX = 0.f;
 	vp.TopLeftY = 0.f;
-
 	g_pImmediateContext->RSSetViewports(1, &vp);
-	g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
+
+	// Note this tutorial doesn't handle full-screen swapchains so we block the ALT+ENTER shortcut
+	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
+	dxgiFactory->Release();
 
 	Textures::InitTextures();
+	Textures::InitializeSamplers();
 	Shaders::InitShaders();
 	Buffers::InitBuffers();
 	States::InitStates();
@@ -1505,7 +1519,7 @@ void UpdateGlobals() {
 		aperture_resolution,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
-		XMFLOAT4(direction.x, direction.y, direction.z, 0)
+		XMFLOAT4(direction.x, direction.y, direction.z, coating_quality)
 	};
 
 	g_pImmediateContext->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
@@ -1546,6 +1560,8 @@ void Render() {
 
 		g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
 
 		g_pImmediateContext->CSSetShader(Shaders::computeShader, nullptr, 0);
 		g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
@@ -1568,8 +1584,9 @@ void Render() {
 
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
 			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Views::null_ua_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
 
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
@@ -1613,22 +1630,24 @@ void Render() {
 			g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &g_LensInterfaceResourceView, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
 
 			g_pImmediateContext->VSSetShader(Shaders::flareVertexShaderCompute, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 			g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
 			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	
+			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
+
 			// Dispatch
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 1);
+			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Views::null_ua_view, nullptr);
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			g_pImmediateContext->VSSetShaderResources(0, 1, Views::null_sr_view);
+			g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 		} else {
 			g_pImmediateContext->RSSetState(States::rasterStateCull);
 			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);

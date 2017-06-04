@@ -5,10 +5,17 @@
 #define AP_IDX 14
 #define PATCH_TESSELATION 32
 
+SamplerState LinearSampler {
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
 struct PSInput {
 	float4 pos : SV_POSITION;
 	float4 color : TEXCOORD0;
 	float4 mask : TEXCOORD1;
+	float4 reflectance : TEXCOORD2;
 };
 
 struct Intersection {
@@ -47,7 +54,8 @@ cbuffer GlobalData : register(b1) {
 	float aperture_resolution;
 	float2 backbuffer_size;
 
-	float4 light_dir;
+	float3 light_dir;
+	float coating_quality;
 };
 
 cbuffer GhostData : register(b2) {
@@ -60,6 +68,34 @@ Texture2D hdr_texture : register(t1);
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
 RWStructuredBuffer<LensInterface> lens_interface : register(u1);
+
+static float4 temperature_color_map[25] = {
+	float4(    0.0, 0.000, 0.000, 0.000),
+	float4( 1000.0, 1.000, 0.007, 0.000),
+	float4( 1500.0, 1.000, 0.126, 0.000),
+	float4( 2000.0, 1.000, 0.234, 0.010),
+	float4( 2500.0, 1.000, 0.349, 0.067),
+	float4( 3000.0, 1.000, 0.454, 0.151),
+	float4( 3500.0, 1.000, 0.549, 0.254),
+	float4( 4000.0, 1.000, 0.635, 0.370),
+	float4( 4500.0, 1.000, 0.710, 0.493),
+	float4( 5000.0, 1.000, 0.778, 0.620),
+	float4( 5500.0, 1.000, 0.837, 0.746),
+	float4( 6000.0, 1.000, 0.890, 0.869),
+	float4( 6500.0, 1.000, 0.937, 0.988),
+	float4( 7000.0, 0.907, 0.888, 1.000),
+	float4( 7500.0, 0.827, 0.839, 1.000),
+	float4( 8000.0, 0.762, 0.800, 1.000),
+	float4( 8500.0, 0.711, 0.766, 1.000),
+	float4( 9000.0, 0.668, 0.738, 1.000),
+	float4( 9500.0, 0.632, 0.714, 1.000),
+	float4(10000.0, 0.602, 0.693, 1.000),
+	float4(12000.0, 0.518, 0.632, 1.000),
+	float4(14000.0, 0.468, 0.593, 1.000),
+	float4(16000.0, 0.435, 0.567, 1.000),
+	float4(18000.0, 0.411, 0.547, 1.000),
+	float4(20000.0, 0.394, 0.533, 1.000)
+};
 
 Intersection TestFlat(Ray r, LensInterface F) {
 	Intersection i;
@@ -100,8 +136,7 @@ Intersection TestSphere(Ray r, LensInterface F) {
 	return i;
 }
 
-float Reflectance(float lambda, float d, float theta1, float n1, float n2, float n3) {
-
+float FresnelReflectance(float lambda, float d, float theta1, float n1, float n2, float n3) {
 	float ni = n1;
 	float nt = n3;
 
@@ -114,6 +149,33 @@ float Reflectance(float lambda, float d, float theta1, float n1, float n2, float
 	return (Rs + Rp) * 0.5;
 }
 
+float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float n2) {
+	float theta1 = asin(sin(theta0) *n0 / n1);
+	float theta2 = asin(sin(theta0) *n0 / n2);
+
+	float rs01 = -sin(theta0-theta1) / sin(theta0+theta1);
+	float rp01 = tan(theta0-theta1) / tan(theta0+theta1);
+	float ts01 = 2*sin(theta1) *cos(theta0) / sin(theta0+theta1);
+	float tp01 = ts01*cos(theta0-theta1);
+
+	float rs12 = -sin(theta1-theta2) / sin(theta1+theta2);
+	float rp12 = +tan(theta1-theta2) / tan(theta1+theta2);
+
+	float ris = ts01*ts01*rs12;
+	float rip = tp01*tp01*rp12;
+
+	float dy = d1*n1 ;
+	float dx = tan(theta1) *dy;
+	float delay = sqrt(dx*dx+dy*dy);
+	float relPhase = 4*PI / lambda*(delay-dx*sin(theta0) );
+
+	float out_s2 = rs01*rs01 + ris*ris + 2*rs01*ris*cos(relPhase);
+	float out_p2 = rp01*rp01 + rip*rip + 2*rp01*rip*cos(relPhase);
+
+	return (out_s2+out_p2) / 2 ;
+}
+
+
 Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 	int LEN = bounce_pair.x + (bounce_pair.x - bounce_pair.y) + (num_interfaces - bounce_pair.y) - 1;
@@ -122,7 +184,6 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 	int T = 1;
 
 	int k;
-	[loop]
 	for(k=0; k < LEN; k++, T += DELTA) {
 		
 		LensInterface F = lens_interface[T];
@@ -159,7 +220,7 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 		// do reflection / refraction for spher . surfaces
 		float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
-		float n1 = F.n.y;
+		// float n1 = F.n.y;
 		float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
 
 		if (!bReflect) { // refraction
@@ -169,19 +230,18 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 		} else { // reflection with AR Coating
 			r.dir = reflect(r.dir,i.norm);
 
-			float _n1 = n0;
-			float _n2 = n1; _n2 = max(sqrt(_n1*_n2) , 1.38);
-			float _n3 = n2;
-			float d1 = (560.0 * NANO_METER) / 4.f / _n1;
-			float R = Reflectance(i.theta, lambda, d1, _n1, _n2, _n3);
-
+			float n1 = max(sqrt(n0*n2) , 1.38 + coating_quality);
+			float d1 = (F.d1 * NANO_METER);
+			float R = FresnelAR(i.theta + 0.001, lambda, d1, n0, n1, n2);
 			R = saturate(R);
+
 			r.tex.a *= R; // update ray intensity
 		}
 	}
 
+	[branch]
 	if (k<LEN)
-		r.tex.a = 0; // early−exit rays = invalid
+		r.tex.a = 0; // early-exit rays = invalid
 	
 	return r;
 }
@@ -255,14 +315,14 @@ float GetArea(int2 pos) {
 	float Oa = unit_patch_length * unit_patch_length * no_area_contributors;
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 1;
-	
-	return (Oa/Na) * energy;
+	float energy = 1.f;
+	float area = (Oa/Na) * energy;
 
+	return isnan(area) ? 0.f : area;
 }
 
-PSInput getTraceResult(float2 ndc){
-	float3 starting_pos = float3(ndc * spread, 400.f);
+PSInput getTraceResult(float2 ndc, float wavelength){
+	float3 starting_pos = float3(ndc * spread, 1000.f);
 	
 	// Project all starting points in the entry lens
 	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
@@ -270,12 +330,13 @@ PSInput getTraceResult(float2 ndc){
 	starting_pos = i.pos - light_dir.xyz;
 
 	Ray r = { starting_pos, light_dir.xyz, float4(0,0,0,1) };
-	Ray g = Trace(r, 450.f * NANO_METER, int2(bounce1, bounce2));
+	Ray g = Trace(r, wavelength, int2(bounce1, bounce2));
 
 	PSInput result;
 	result.pos = float4(g.pos.xyz, 1.f);
 	result.mask = float4(ndc, 0, 1);
 	result.color = g.tex;
+	result.reflectance = float4(0,0,0, g.tex.a);
 
 	return result;
 }
@@ -283,17 +344,32 @@ PSInput getTraceResult(float2 ndc){
 // Compute
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
-void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID) {
+void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_GroupIndex) {
 	int2 pos = gid.xy * NUM_THREADS + gtid.xy;
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
-	PSInput result = getTraceResult(ndc);
+	float color_spectrum[3] = {650.f, 510.f, 475.f};
+	float wavelength = color_spectrum[gid.z] * NANO_METER;
+
+	PSInput result = getTraceResult(ndc, wavelength);
 	
 	uint offset = PosToOffset(pos);
-	uav_buffer[offset] = result;
+	uav_buffer[offset].reflectance.a = 0;
 
 	AllMemoryBarrierWithGroupSync();
+
+	uav_buffer[offset].pos = result.pos;
+	uav_buffer[offset].color = result.color;
+	uav_buffer[offset].mask = result.mask;
+
+	if(gid.z == 0) {
+		uav_buffer[offset].reflectance.r = result.reflectance.a;
+	}else if(gid.z == 1){
+		uav_buffer[offset].reflectance.g = result.reflectance.a;
+	}else if(gid.z == 2){
+		uav_buffer[offset].reflectance.b = result.reflectance.a;
+	}
 
 	uav_buffer[offset].mask.w = GetArea(pos);
 
@@ -313,34 +389,6 @@ PSInput VS(uint id : SV_VertexID) {
 }
 
 float3 TemperatureToColor(float t) {
-	float4 temperature_color_map[25] = {
-		float4(    0.0, 0.000, 0.000, 0.000),
-		float4( 1000.0, 1.000, 0.007, 0.000),
-		float4( 1500.0, 1.000, 0.126, 0.000),
-		float4( 2000.0, 1.000, 0.234, 0.010),
-		float4( 2500.0, 1.000, 0.349, 0.067),
-		float4( 3000.0, 1.000, 0.454, 0.151),
-		float4( 3500.0, 1.000, 0.549, 0.254),
-		float4( 4000.0, 1.000, 0.635, 0.370),
-		float4( 4500.0, 1.000, 0.710, 0.493),
-		float4( 5000.0, 1.000, 0.778, 0.620),
-		float4( 5500.0, 1.000, 0.837, 0.746),
-		float4( 6000.0, 1.000, 0.890, 0.869),
-		float4( 6500.0, 1.000, 0.937, 0.988),
-		float4( 7000.0, 0.907, 0.888, 1.000),
-		float4( 7500.0, 0.827, 0.839, 1.000),
-		float4( 8000.0, 0.762, 0.800, 1.000),
-		float4( 8500.0, 0.711, 0.766, 1.000),
-		float4( 9000.0, 0.668, 0.738, 1.000),
-		float4( 9500.0, 0.632, 0.714, 1.000),
-		float4(10000.0, 0.602, 0.693, 1.000),
-		float4(12000.0, 0.518, 0.632, 1.000),
-		float4(14000.0, 0.468, 0.593, 1.000),
-		float4(16000.0, 0.435, 0.567, 1.000),
-		float4(18000.0, 0.411, 0.547, 1.000),
-		float4(20000.0, 0.394, 0.533, 1.000)
-	};
-
 	int index;
 	for(int i=0; i < 25; ++i){
 		if(t < temperature_color_map[i].x) {
@@ -364,19 +412,24 @@ float3 TemperatureToColor(float t) {
 float4 PS(in PSInput input) : SV_Target {
 	float4 color = input.color;
 	float4 mask = input.mask;
+
+	float2 aperture_uv = (color.xy + 1.f)/2.f;
+	float aperture = hdr_texture.Sample(LinearSampler, aperture_uv).r;
 	
-	float alpha1 = color.a;
-	float alpha2 = color.z < 1.0f;
-	float alpha3 = length(mask.xy) < 1.0;
-	float alpha4 = length(color.xy) < 1.0f;
-	float alpha5 = mask.w;
-	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
+	float fade = 0.05;
+	float sun_disk = 1 - saturate((length(mask.xy) - 1 + fade)/fade);
+
+	float alpha1 = color.z < 1.0f;
+	float alpha2 = sun_disk;
+	float alpha3 = mask.w;
+	float alpha4 = aperture;
+	float alpha = alpha1 * alpha2 * alpha3 * alpha4;
 
 	[branch]
 	if(alpha == 0.f)
 		discard;
 
-	float3 v = alpha * TemperatureToColor(8000);
+	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(10000);
 	
 	return float4(v, 1.f);
 }
@@ -391,7 +444,6 @@ float3 ACESFilm(float3 x) {
 }
 
 float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
-	float2 uv = pos.xy / backbuffer_size;
 	float3 c = hdr_texture.Load(int3(pos.xy,0)).rgb;
 	c = ACESFilm(c);
 	return float4(c, 1);
@@ -402,8 +454,8 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = 9;// + time * 0.01f;
-	float shutter = (sin(time * 0.1) + 1.f) * 0.5f;
+	int num_blades = 16;
+	float shutter = 1;//(sin(time * 0.5) + 1.f) * 0.5f;
 	float angle_offset = shutter * 2;
 
 	float signed_distance = 0.f;
@@ -413,8 +465,11 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
 
-	float l = lerp(0.1, 0.69, shutter);
-	float u = l + 0.001;
+	float radius = 0.95;
+	float fade = 0.02;
+
+	float l = radius;
+	float u = radius + fade;
 	float s = u - l;
 	float c = 1.f - saturate(saturate(signed_distance - l)/s);
 	
