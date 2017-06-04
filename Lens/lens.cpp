@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//#define DRAW2D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -117,10 +117,27 @@ namespace LensShapes {
 	};
 }
 
+INT sampleMask = 0x0F;
+UINT offset = 0;
+UINT stride = sizeof(SimpleVertex);
+float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
+
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
 std::vector<LensInterface> nikon_28_75mm_lens_interface;
+
+float x_dir = 0.f;
+float y_dir = 0.f;
+float aperture_opening = 10.f;
+vec3 direction(0.f, 0.f, -1.f);
+
+bool left_mouse_down = false;
+bool spacebar_down = false;
+bool key_down = false;
+bool editing_aperture = false;
+bool editing_spread = false;
+bool draw2d = true;
 
 const float d6  = 53.142f;
 const float d10 =  7.063f;
@@ -152,7 +169,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 }, 
 	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 }, 
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f, 10.0f, 440 }, 
+	{       0.0f,     dAp, 1.00000f, true,  18.f, aperture_opening, 440 },
 
 	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 }, 
 
@@ -201,22 +218,9 @@ float min_ior = 1000.f;
 float max_ior = -1000.f;
 float global_scale = 0.009;
 float total_lens_distance = 0.f;
-float time  = (float)ghost_bounce_1;
+float time = (float)ghost_bounce_1;
 float speed = 0.1f;
-float rays_spread = 1.0f;
-float x_dir = 0.f;
-float y_dir = 0.f;
-
-bool left_mouse_down = false;
-bool spacebar_down = false;
-bool draw2d = true;
-
-vec3 direction( 0.f, 0.f,-1.f);
-
-INT sampleMask = 0x0F;
-UINT offset = 0;
-UINT stride = sizeof(SimpleVertex);
-float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
+float rays_spread = 5.0f;
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
@@ -648,6 +652,66 @@ namespace States {
 	}
 }
 
+void UpdateLensComponents() {
+	D3D11_BOX box = { 0 };
+	box.left = aperture_id * sizeof(LensInterface);
+	box.right = (aperture_id + 1) * sizeof(LensInterface);
+	box.back = 1;
+	box.bottom = 1;
+
+	nikon_28_75mm_lens_interface[aperture_id].sa = aperture_opening;
+	LensInterface aperture_component = nikon_28_75mm_lens_interface[aperture_id];
+
+	g_pImmediateContext->UpdateSubresource(Buffers::lensInterface, 0, &box, &aperture_component, 0, 0);
+}
+
+void ParseLensComponents() {
+	// Parse the lens components into the LensInterface the ray_trace routine expects
+	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
+
+	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
+		PatentFormat& entry = nikon_28_75mm_lens_components[i];
+		total_lens_distance += entry.d;
+
+		float left_ior = i == 0 ? 1.f : nikon_28_75mm_lens_components[i - 1].n;
+		float right_ior = entry.n;
+
+		if (right_ior != 1.f) {
+			min_ior = min(min_ior, right_ior);
+			max_ior = max(max_ior, right_ior);
+		}
+
+		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
+		vec3 n = { left_ior, 1.f, right_ior };
+
+		LensInterface component = { center, entry.r, n, entry.h, entry.coating_thickness, (float)entry.flat, total_lens_distance, entry.w };
+		nikon_28_75mm_lens_interface[i] = component;
+	}
+
+	HRESULT hr;
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	bd.CPUAccessFlags = 0;
+	bd.ByteWidth = (int)nikon_28_75mm_lens_interface.size() * (int)sizeof(LensInterface);
+	bd.StructureByteStride = sizeof(LensInterface);
+
+	D3D11_SUBRESOURCE_DATA data;
+	data.pSysMem = &nikon_28_75mm_lens_interface.front();
+	hr = g_pd3dDevice->CreateBuffer(&bd, &data, &Buffers::lensInterface);
+
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
+	ZeroMemory(&uaDescView, sizeof(uaDescView));
+	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	uaDescView.Buffer.FirstElement = 0;
+	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
+	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+	hr = g_pd3dDevice->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Views::lensInterfaceResourceView);
+}
+
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
@@ -673,42 +737,37 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	while( WM_QUIT != msg.message ) {
 
 		if (msg.message == WM_KEYDOWN) {
-			if (msg.wParam == 37) {
+			if (!key_down && msg.wParam == 81)
+				editing_aperture = true;
+
+			if (!key_down && msg.wParam == 87)
+				editing_spread = true;
+
+			if (!key_down && msg.wParam == 32)
+				draw2d = !draw2d;
+
+			if (!key_down && msg.wParam == 37)
 				ghost_bounce_1 = std::max<int>(2, ghost_bounce_1 - 1);
-				Sleep(80);
-			}
 
-			if (msg.wParam == 39) {
+			if (!key_down && msg.wParam == 39)
 				ghost_bounce_1 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_1 + 1);
-				Sleep(80);
-			}
 
-			if (msg.wParam == 38) {
+			if (!key_down && msg.wParam == 40)
+				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
+
+			if (!key_down && msg.wParam == 38) {
 				ghost_bounce_2 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_2 + 1);
 				ghost_bounce_2 = std::min<int>(ghost_bounce_1 - 2, ghost_bounce_2);
-				Sleep(80);
 			}
-
-			if (msg.wParam == 40) {
-				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
-				Sleep(80);
-			}
-
+		
 			ghost_bounce_1 = std::max<int>(ghost_bounce_2 + 2, ghost_bounce_1);
-
-			if (msg.wParam == 32) {
-				if(!spacebar_down)
-					draw2d = !draw2d;
-
-				if (!spacebar_down)
-					spacebar_down = true;
-			}
+			key_down = true;
 		}
 
 		if (msg.message == WM_KEYUP) {
-			if (msg.wParam == 32) {
-				spacebar_down = false;
-			}
+			key_down = false;
+			editing_aperture = false;
+			editing_spread = false;
 		}
 
 		if (msg.message == WM_LBUTTONDOWN) {
@@ -728,9 +787,22 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			POINT p;
 			GetCursorPos(&p);
 			ScreenToClient(g_hWnd, &p);
-			if (left_mouse_down) {
-				x_dir = ((p.x / backbuffer_width) * 2.f - 1.f) * 0.2f;
-				y_dir = ((p.y / backbuffer_height) * 2.f - 1.f) * 0.2f;
+
+			float nx = ((p.x / backbuffer_width) * 2.f - 1.f);
+			float ny = ((p.y / backbuffer_height) * 2.f - 1.f);
+
+			if (!key_down && left_mouse_down) {
+				x_dir = nx * 0.2f;
+				y_dir = ny * 0.2f;
+			}
+
+			if (editing_aperture) {
+				aperture_opening = 10.f + ny * 10.f;
+				UpdateLensComponents();
+			}
+
+			if (editing_spread) {
+				rays_spread = 6.f + ny * 5.f;
 			}
 		}
 
@@ -998,53 +1070,6 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	g_pd3dDevice->CreateUnorderedAccessView(patch.cs_vertices, &uaDescView, &patch.ua_vertices_resource_view);
 
 	return patch;
-}
-
-void ParseLensComponents() {
-	// Parse the lens components into the LensInterface the ray_trace routine expects
-	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
-
-	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
-		PatentFormat& entry = nikon_28_75mm_lens_components[i];
-		total_lens_distance += entry.d;
-
-		float left_ior = i == 0 ? 1.f : nikon_28_75mm_lens_components[i - 1].n;
-		float right_ior = entry.n;
-
-		if (right_ior != 1.f) {
-			min_ior = min(min_ior, right_ior);
-			max_ior = max(max_ior, right_ior);
-		}
-
-		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
-		vec3 n = { left_ior, 1.f, right_ior };
-
-		LensInterface component = { center, entry.r, n, entry.h, entry.coating_thickness, (float)entry.flat, total_lens_distance, entry.w };
-		nikon_28_75mm_lens_interface[i] = component;
-	}
-
-	HRESULT hr;
-	D3D11_BUFFER_DESC bd;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	bd.CPUAccessFlags = 0;
-	bd.ByteWidth = (int)nikon_28_75mm_lens_interface.size() * (int)sizeof(LensInterface);
-	bd.StructureByteStride = sizeof(LensInterface);
-
-	D3D11_SUBRESOURCE_DATA data;
-	data.pSysMem = &nikon_28_75mm_lens_interface.front();
-	hr = g_pd3dDevice->CreateBuffer(&bd, &data, &Buffers::lensInterface);
-
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
-	ZeroMemory(&uaDescView, sizeof(uaDescView));
-	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-	uaDescView.Buffer.FirstElement = 0;
-	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
-	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-	hr = g_pd3dDevice->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Views::lensInterfaceResourceView);
 }
 
 //--------------------------------------------------------------------------------------
