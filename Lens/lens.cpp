@@ -442,9 +442,9 @@ namespace Shaders {
 		return hr;
 	}
 
-	HRESULT CompileShaderFromFile(LPCWSTR shaderFile, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
+	HRESULT CompileShaderFromFile(LPCWSTR shaderFile, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut, D3D_SHADER_MACRO* defines = nullptr) {
 		ID3DBlob* temp = nullptr;
-		HRESULT hr = D3DCompileFromFile(shaderFile, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
+		HRESULT hr = D3DCompileFromFile(shaderFile, defines, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
 		char* msg = temp ? (char*)temp->GetBufferPointer() : nullptr; msg;
 		return hr;
 	}
@@ -470,7 +470,8 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
+		D3D_SHADER_MACRO debug_flags[] = { "DEBUG", "1", 0, 0 };
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();
 
