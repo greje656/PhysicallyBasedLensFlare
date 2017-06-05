@@ -410,6 +410,10 @@ float3 TemperatureToColor(float t) {
 // Pixel Shader
 // ----------------------------------------------------------------------------------
 float4 PS(in PSInput input) : SV_Target {
+	#if defined(DEBUG)
+		return float4(1,0,0,1);
+	#endif
+
 	float4 color = input.color;
 	float4 mask = input.mask;
 
