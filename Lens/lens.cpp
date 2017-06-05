@@ -429,11 +429,11 @@ namespace Shaders {
 	ID3D11PixelShader*    toneMapPixelShader = nullptr;
 
 	ID3D11VertexShader*   flareVertexShader = nullptr;
-	ID3D11GeometryShader* flareGeometryShader = nullptr;
 	ID3D11VertexShader*   flareVertexShaderCompute = nullptr;
 	ID3D11PixelShader*    flarePixelShader = nullptr;
-	ID3D11ComputeShader*  computeShader = nullptr;
+	ID3D11PixelShader*    flarePixelShaderDebug = nullptr;
 	ID3D11PixelShader*    aperture_ps_shader;
+	ID3D11ComputeShader*  computeShader = nullptr;
 
 	HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
 		ID3DBlob* temp = nullptr;
@@ -468,6 +468,10 @@ namespace Shaders {
 		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
 		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShaderCompute);
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
+		blob->Release();
+
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
@@ -539,8 +543,9 @@ namespace States {
 	ID3D11BlendState*        blendStateNoBlend = nullptr;
 	ID3D11BlendState*        blendStateMask = nullptr;
 	ID3D11BlendState*        blendStateAdd = nullptr;
-	ID3D11RasterizerState*   rasterStateNoCull = nullptr;
 	ID3D11RasterizerState*   rasterStateCull = nullptr;
+	ID3D11RasterizerState*   rasterStateNoCull = nullptr;
+	ID3D11RasterizerState*   rasterStateNoCullWireframe = nullptr;
 	ID3D11DepthStencilState* depthStencilState = nullptr;
 	ID3D11DepthStencilState* depthStencilStateFill = nullptr;
 	ID3D11DepthStencilState* depthStencilStateGreaterOrEqualIncr = nullptr;
@@ -552,11 +557,13 @@ namespace States {
 		ZeroMemory(&rasterState, sizeof(D3D11_RASTERIZER_DESC));
 		rasterState.FillMode = D3D11_FILL_SOLID;
 		rasterState.CullMode = D3D11_CULL_BACK;
-		//rasterState.FillMode = D3D11_FILL_WIREFRAME;
 		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateCull);
 
 		rasterState.CullMode = D3D11_CULL_NONE;
 		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateNoCull);
+
+		rasterState.FillMode = D3D11_FILL_WIREFRAME;
+		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateNoCullWireframe);
 
 		D3D11_BLEND_DESC BlendState;
 		D3D11_BLEND_DESC MaskedBlendState;
@@ -1633,7 +1640,6 @@ void Render() {
 			GhostData cb = { XMFLOAT4((float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0) };
 			g_pImmediateContext->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
 
-			g_pImmediateContext->RSSetState(States::rasterStateNoCull);
 			g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
 			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1663,7 +1669,13 @@ void Render() {
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+
+			g_pImmediateContext->RSSetState(States::rasterStateNoCull);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+
+			g_pImmediateContext->RSSetState(States::rasterStateNoCullWireframe);
+			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+
 			g_pImmediateContext->VSSetShaderResources(0, 1, Views::null_sr_view);
 			g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 		} else {
