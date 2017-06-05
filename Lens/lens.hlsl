@@ -197,8 +197,10 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 		else 
 			i = TestSphere(r, lens_interface[T]);
 
+		[branch]
 		if (!i.hit){
-			r.pos = i.pos;
+			r.pos = 0;
+			r.tex.a = 0;
 			break; // exit upon miss
 		}
 
@@ -225,8 +227,13 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 		if (!bReflect) { // refraction
 			r.dir = refract(r.dir,i.norm,n0/n2);
-			if(length(r.dir) == 0)
+
+			[branch]
+			if(length(r.dir) == 0){
+				r.pos = 0;
+				r.tex.a = 0;
 				break; // total reflection
+			}
 		} else { // reflection with AR Coating
 			r.dir = reflect(r.dir,i.norm);
 
@@ -240,8 +247,10 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 	}
 
 	[branch]
-	if (k<LEN)
+	if (k<LEN) {
+		r.pos = 0;
 		r.tex.a = 0; // early-exit rays = invalid
+	}
 	
 	return r;
 }
@@ -316,7 +325,7 @@ float GetArea(int2 pos) {
 	float Na = (A + B + C + D) / no_area_contributors;
 
 	float energy = 1.f;
-	float area = (Oa/Na) * energy;
+	float area = (Oa/(Na + 0.00001)) * energy;
 
 	return isnan(area) ? 0.f : area;
 }
@@ -410,9 +419,6 @@ float3 TemperatureToColor(float t) {
 // Pixel Shader
 // ----------------------------------------------------------------------------------
 float4 PS(in PSInput input) : SV_Target {
-	#if defined(DEBUG)
-		return float4(1,0,0,1);
-	#endif
 
 	float4 color = input.color;
 	float4 mask = input.mask;
@@ -432,6 +438,14 @@ float4 PS(in PSInput input) : SV_Target {
 	[branch]
 	if(alpha == 0.f)
 		discard;
+
+	#if defined(DEBUG_WIREFRAME)
+		return float4(0.75, 0.0, 0.0, 1);
+	#endif
+
+	#if defined(DEBUG_VALUES)
+		return float4(alpha, alpha, alpha ,1);
+	#endif
 
 	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(10000);
 	

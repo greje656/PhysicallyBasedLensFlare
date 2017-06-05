@@ -137,6 +137,7 @@ bool spacebar_down = false;
 bool key_down = false;
 bool editing_aperture = false;
 bool editing_spread = false;
+bool overlay_wireframe = false;
 bool draw2d = true;
 
 const float d6  = 53.142f;
@@ -432,6 +433,7 @@ namespace Shaders {
 	ID3D11VertexShader*   flareVertexShaderCompute = nullptr;
 	ID3D11PixelShader*    flarePixelShader = nullptr;
 	ID3D11PixelShader*    flarePixelShaderDebug = nullptr;
+	ID3D11PixelShader*    flarePixelShaderDebugWireframe = nullptr;
 	ID3D11PixelShader*    aperture_ps_shader;
 	ID3D11ComputeShader*  computeShader = nullptr;
 
@@ -470,13 +472,18 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
 		blob->Release();
 
-		D3D_SHADER_MACRO debug_flags[] = { "DEBUG", "1", 0, 0 };
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
+		D3D_SHADER_MACRO debug_flags[] = { "DEBUG_VALUES", "1", 0, 0 };
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
+		blob->Release();
+
+		D3D_SHADER_MACRO wireframe_debug_flags[] = { "DEBUG_WIREFRAME", "1", 0, 0 };
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob);
@@ -745,6 +752,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	while( WM_QUIT != msg.message ) {
 
 		if (msg.message == WM_KEYDOWN) {
+			if (!key_down && msg.wParam == 65)
+				overlay_wireframe = !overlay_wireframe;
+
 			if (!key_down && msg.wParam == 81)
 				editing_aperture = true;
 
@@ -1660,7 +1670,7 @@ void Render() {
 			g_pImmediateContext->VSSetShader(Shaders::flareVertexShaderCompute, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
-			g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
+			g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
 			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
 			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
@@ -1670,12 +1680,14 @@ void Render() {
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-
 			g_pImmediateContext->RSSetState(States::rasterStateNoCull);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 
-			g_pImmediateContext->RSSetState(States::rasterStateNoCullWireframe);
-			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+			if (overlay_wireframe) {
+				g_pImmediateContext->RSSetState(States::rasterStateNoCullWireframe);
+				g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebugWireframe, nullptr, 0);
+				g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+			}
 
 			g_pImmediateContext->VSSetShaderResources(0, 1, Views::null_sr_view);
 			g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
