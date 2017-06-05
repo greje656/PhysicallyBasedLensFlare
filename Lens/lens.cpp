@@ -1654,9 +1654,9 @@ void Render() {
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 			g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
-			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
-
+			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+			g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 			// Dispatch
 			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Views::null_ua_view, nullptr);
@@ -1717,13 +1717,13 @@ void Render() {
 	#endif
 	
 	// Visualize the aperture texture:
-	/*
-	g_pImmediateContext->PSSetShader(g_pToneMapPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &g_GlobalData);
-	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
-	*/
+
+	//g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	//g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	//g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+	//g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+	
 	g_pSwapChain->Present(0, 0);
 	// SaveBackBuffer();
 }
