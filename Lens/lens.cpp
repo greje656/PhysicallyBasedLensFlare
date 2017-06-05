@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -137,6 +137,7 @@ bool spacebar_down = false;
 bool key_down = false;
 bool editing_aperture = false;
 bool editing_spread = false;
+bool editing_coating_quality = false;
 bool overlay_wireframe = false;
 bool draw2d = true;
 
@@ -755,6 +756,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			if (!key_down && msg.wParam == 65)
 				overlay_wireframe = !overlay_wireframe;
 
+			if (!key_down && msg.wParam == 69)
+				editing_coating_quality = !editing_coating_quality;
+
 			if (!key_down && msg.wParam == 81)
 				editing_aperture = true;
 
@@ -786,6 +790,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			key_down = false;
 			editing_aperture = false;
 			editing_spread = false;
+			editing_coating_quality = false;
 		}
 
 		if (msg.message == WM_LBUTTONDOWN) {
@@ -821,6 +826,10 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 			if (editing_spread) {
 				rays_spread = 6.f + ny * 5.f;
+			}
+
+			if (editing_coating_quality) {
+				coating_quality = 0.5 + ny;
 			}
 		}
 

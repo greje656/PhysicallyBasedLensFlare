@@ -426,9 +426,9 @@ float4 PS(in PSInput input) : SV_Target {
 	float2 aperture_uv = (color.xy + 1.f)/2.f;
 	float aperture = hdr_texture.Sample(LinearSampler, aperture_uv).r;
 	
-	float fade = 0.05;
+	float fade = 0.2;
 	float sun_disk = 1 - saturate((length(mask.xy) - 1 + fade)/fade);
-
+	sun_disk = smoothstep(0, 1, sun_disk);
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
 	float alpha3 = mask.w;
@@ -447,7 +447,7 @@ float4 PS(in PSInput input) : SV_Target {
 		return float4(alpha, alpha, alpha ,1);
 	#endif
 
-	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(10000);
+	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(3000);
 	
 	return float4(v, 1.f);
 }
@@ -472,7 +472,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = 16;
+	int num_blades = 8;
 	float shutter = 1;//(sin(time * 0.5) + 1.f) * 0.5f;
 	float angle_offset = shutter * 2;
 
@@ -483,8 +483,8 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
 
-	float radius = 0.95;
-	float fade = 0.02;
+	float radius = 0.65;
+	float fade = 0.1;
 
 	float l = radius;
 	float u = radius + fade;
