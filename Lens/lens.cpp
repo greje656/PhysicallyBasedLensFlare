@@ -419,7 +419,7 @@ namespace Textures {
 		g_pd3dDevice->CreateRenderTargetView(backBuffer, nullptr, &Views::renderTargetView);
 
 		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::HDRTexture, Views::shaderHDRView, Views::HDRView);
-		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
+		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
 		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthStencil, Views::depthStencilView);
 		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depth_buffer, Textures::aperture_depth_buffer_view);
 	}
@@ -829,7 +829,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			}
 
 			if (editing_coating_quality) {
-				coating_quality = 0.5 + ny;
+				coating_quality = 0.5f + ny;
 			}
 		}
 

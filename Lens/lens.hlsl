@@ -447,7 +447,7 @@ float4 PS(in PSInput input) : SV_Target {
 		return float4(alpha, alpha, alpha ,1);
 	#endif
 
-	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(3000);
+	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(6000);
 	
 	return float4(v, 1.f);
 }
@@ -473,8 +473,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
 	int num_blades = 8;
-	float shutter = 1;//(sin(time * 0.5) + 1.f) * 0.5f;
-	float angle_offset = shutter * 2;
+	float angle_offset = 2;
 
 	float signed_distance = 0.f;
 	for(int i = 0; i < num_blades; ++i) {
@@ -483,15 +482,33 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
 
-	float radius = 0.65;
-	float fade = 0.1;
-
-	float l = radius;
-	float u = radius + fade;
-	float s = u - l;
-	float c = 1.f - saturate(saturate(signed_distance - l)/s);
+	float aperture_mask = 1.f;
 	
-	c = smoothstep(0, 1, c);
+	{ // Polygon shape
+		float radius = 0.75;
+		float fade = 0.05;
 
-	return float4(c ,c ,c, 1);
+		float l = radius;
+		float u = radius + fade;
+		float s = u - l;
+		float c = 1.f - saturate(saturate(signed_distance - l)/s);
+
+		aperture_mask = smoothstep(0, 1, c);
+	}
+
+	{ // Diffraction rings
+		float w = 0.1;
+		float s = signed_distance + 0.1;
+		float n = saturate(saturate(s + w) - (1.f - w));
+		
+		float x = n/w;
+		float a = x;
+		float b = -x + 1.f;
+		float c = min(a,b) * 2.f;
+		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
+		float rings = pow(t*c, 1);
+		aperture_mask = aperture_mask + rings * 0.25;
+	}
+
+	return float4(aperture_mask, aperture_mask, aperture_mask, 1);
 }
