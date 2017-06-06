@@ -130,7 +130,7 @@ std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
 float x_dir = 0.f;
 float y_dir = 0.f;
-float aperture_opening = 10.f;
+float aperture_opening = 5.f;
 vec3 direction(0.f, 0.f, -1.f);
 
 bool left_mouse_down = false;
