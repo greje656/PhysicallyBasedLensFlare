@@ -51,11 +51,14 @@ cbuffer GlobalData : register(b1) {
 	float aperture_id;
 
 	float num_interfaces;
-	float aperture_resolution;
+	float coating_quality;
 	float2 backbuffer_size;
 
 	float3 light_dir;
-	float coating_quality;
+	float aperture_resolution;
+
+	float aperture_opening;
+	float3 padding;
 };
 
 cbuffer GhostData : register(b2) {
@@ -427,8 +430,11 @@ float4 PS(in PSInput input) : SV_Target {
 	float aperture = hdr_texture.Sample(LinearSampler, aperture_uv).r;
 	
 	float fade = 0.2;
-	float sun_disk = 1 - saturate((length(mask.xy) - 1 + fade)/fade);
+	float lens_distance = length(mask.xy);
+	float sun_disk = 1 - saturate((lens_distance - 1.f + fade)/fade);
 	sun_disk = smoothstep(0, 1, sun_disk);
+	sun_disk *= lerp(0.8, 1, saturate(lens_distance));
+
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
 	float alpha3 = mask.w;
@@ -473,7 +479,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
 	int num_blades = 8;
-	float angle_offset = 2;
+	float angle_offset = aperture_opening;
 
 	float signed_distance = 0.f;
 	for(int i = 0; i < num_blades; ++i) {
@@ -506,8 +512,8 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		float b = -x + 1.f;
 		float c = min(a,b) * 2.f;
 		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
-		float rings = pow(t*c, 1);
-		aperture_mask = aperture_mask + rings * 0.25;
+		float rings = pow(t*c, 1.f);
+		aperture_mask = aperture_mask + abs(rings) * 0.125;
 	}
 
 	return float4(aperture_mask, aperture_mask, aperture_mask, 1);

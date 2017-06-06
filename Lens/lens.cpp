@@ -89,6 +89,7 @@ struct GlobalData {
 
 	XMFLOAT2 backbuffer_size;
 	XMFLOAT4 direction;
+	XMFLOAT4 aperture_opening;
 };
 
 struct GhostData {
@@ -820,12 +821,12 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			}
 
 			if (editing_aperture) {
-				aperture_opening = 10.f + ny * 10.f;
+				aperture_opening = 5.f + ny * 5.f;
 				UpdateLensComponents();
 			}
 
 			if (editing_spread) {
-				rays_spread = 6.f + ny * 5.f;
+				rays_spread = 5.f + ny * 5.f;
 			}
 
 			if (editing_coating_quality) {
@@ -1561,10 +1562,11 @@ void UpdateGlobals() {
 
 		aperture_id,
 		(float)nikon_28_75mm_lens_interface.size(),
-		aperture_resolution,
+		coating_quality,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
-		XMFLOAT4(direction.x, direction.y, direction.z, coating_quality)
+		XMFLOAT4(direction.x, direction.y, direction.z, aperture_resolution),
+		XMFLOAT4(aperture_opening, 0,0,0)
 	};
 
 	g_pImmediateContext->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
