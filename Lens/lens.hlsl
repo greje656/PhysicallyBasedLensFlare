@@ -433,7 +433,7 @@ float4 PS(in PSInput input) : SV_Target {
 	float lens_distance = length(mask.xy);
 	float sun_disk = 1 - saturate((lens_distance - 1.f + fade)/fade);
 	sun_disk = smoothstep(0, 1, sun_disk);
-	sun_disk *= lerp(0.8, 1, saturate(lens_distance));
+	sun_disk *= lerp(0.5, 1, saturate(lens_distance));
 
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
@@ -478,7 +478,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = 8;
+	int num_blades = 7;
 	float angle_offset = aperture_opening;
 
 	float signed_distance = 0.f;

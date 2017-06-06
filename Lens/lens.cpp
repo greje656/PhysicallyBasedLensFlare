@@ -432,12 +432,15 @@ namespace Shaders {
 	ID3D11PixelShader*    toneMapPixelShader = nullptr;
 
 	ID3D11VertexShader*   flareVertexShader = nullptr;
-	ID3D11VertexShader*   flareVertexShaderCompute = nullptr;
 	ID3D11PixelShader*    flarePixelShader = nullptr;
 	ID3D11PixelShader*    flarePixelShaderDebug = nullptr;
 	ID3D11PixelShader*    flarePixelShaderDebugWireframe = nullptr;
+	ID3D11ComputeShader*  flareComputeShader = nullptr;
+
+	ID3D11ComputeShader*  fftRowComputeShader = nullptr;
+	ID3D11ComputeShader*  fftColComputeShader = nullptr;
+
 	ID3D11PixelShader*    aperture_ps_shader;
-	ID3D11ComputeShader*  computeShader = nullptr;
 
 	HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
 		ID3DBlob* temp = nullptr;
@@ -470,7 +473,7 @@ namespace Shaders {
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShaderCompute);
+		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
 		blob->Release();
 
@@ -489,7 +492,26 @@ namespace Shaders {
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob);
-		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::computeShader);
+		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
+		blob->Release();
+
+		int butterfly_count = (int)(logf(aperture_resolution) / logf(2.0));
+		std::string resolution_string = std::to_string((int)aperture_resolution);
+		std::string butterfly_string = std::to_string(butterfly_count);
+		D3D_SHADER_MACRO fft_defines_row[] = {
+			"LENGTH", resolution_string.c_str(),
+			"BUTTERFLY_COUNT", butterfly_string.c_str(),
+			"ROWPASS", "", 0, 0 };
+		hr = CompileShaderFromFile(L"fftslm.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
+		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
+		blob->Release();
+
+		D3D_SHADER_MACRO fft_defines_col[] = {
+			"LENGTH", resolution_string.c_str(),
+			"BUTTERFLY_COUNT", butterfly_string.c_str(),
+			"ROWCOL", "", 0, 0 };
+		hr = CompileShaderFromFile(L"fftslm.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
+		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
@@ -1602,7 +1624,7 @@ void Render() {
 		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		g_pImmediateContext->VSSetShader(Shaders::flareVertexShaderCompute, nullptr, 0);
+		g_pImmediateContext->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
 		g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 		g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
@@ -1610,7 +1632,7 @@ void Render() {
 		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
 
-		g_pImmediateContext->CSSetShader(Shaders::computeShader, nullptr, 0);
+		g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 		g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
 		g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
 		
@@ -1678,7 +1700,7 @@ void Render() {
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
 			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
 
-			g_pImmediateContext->VSSetShader(Shaders::flareVertexShaderCompute, nullptr, 0);
+			g_pImmediateContext->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 			g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
