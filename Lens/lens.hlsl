@@ -446,7 +446,7 @@ float4 PS(in PSInput input) : SV_Target {
 		discard;
 
 	#if defined(DEBUG_WIREFRAME)
-		return float4(0.75, 0.0, 0.0, 1);
+		return float4(aperture_uv, 0.0, 1);
 	#endif
 
 	#if defined(DEBUG_VALUES)

@@ -223,7 +223,7 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 float time = (float)ghost_bounce_1;
 float speed = 0.1f;
-float rays_spread = 5.0f;
+float rays_spread = 2.0f;
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
