@@ -53,7 +53,7 @@ void ButterflyPass(int passIndex, uint x, uint t0, uint t1, out float3 resultR, 
 	uint2 Indices;
 	float2 Weights;
 	GetButterflyValues(passIndex, x, Indices, Weights);
-
+	
 	float3 inputR1 = pingPongArray[t0][Indices.x];
 	float3 inputI1 = pingPongArray[t1][Indices.x];
 
@@ -63,21 +63,6 @@ void ButterflyPass(int passIndex, uint x, uint t0, uint t1, out float3 resultR, 
 	resultR = inputR1 + Weights.x * inputR2 - Weights.y * inputI2;
 	resultI = inputI1 + Weights.y * inputR2 + Weights.x * inputI2;
 }
-
-void ButterflyPassFinalNoI(int passIndex, int x, int t0, int t1, out float3 resultR)
-{
-	uint2 Indices;
-	float2 Weights;
-	GetButterflyValues(passIndex, x, Indices, Weights);
-
-	float3 inputR1 = pingPongArray[t0][Indices.x];
-
-	float3 inputR2 = pingPongArray[t0][Indices.y];
-	float3 inputI2 = pingPongArray[t1][Indices.y];
-
-	resultR = (inputR1 + Weights.x * inputR2 + Weights.y * inputI2) * 0.5;
-}
-
 
 [numthreads( LENGTH, 1, 1 )]
 void ButterflySLM(uint3 position : SV_DispatchThreadID)

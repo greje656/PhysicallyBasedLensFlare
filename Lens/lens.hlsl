@@ -58,7 +58,8 @@ cbuffer GlobalData : register(b1) {
 	float aperture_resolution;
 
 	float aperture_opening;
-	float3 padding;
+	float number_of_blades;
+	float2 padding;
 };
 
 cbuffer GhostData : register(b2) {
@@ -68,6 +69,7 @@ cbuffer GhostData : register(b2) {
 
 // Bounded buffers
 Texture2D hdr_texture : register(t1);
+Texture2D hdr_texture2 : register(t2);
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
 RWStructuredBuffer<LensInterface> lens_interface : register(u1);
@@ -473,12 +475,23 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 	return float4(c, 1);
 }
 
+float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
+	float ratio = backbuffer_size.x / backbuffer_size.y;
+	float2 uv = pos.xy / backbuffer_size + 0.5;
+	uv *= float2(ratio, 1);
+
+	float r = hdr_texture.Sample(LinearSampler, uv).r;
+	float i = hdr_texture2.Sample(LinearSampler, uv).r;
+	float3 c = float3(r,i,0);
+	return float4(c, 1);
+}
+
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = 7;
+	int num_blades = number_of_blades;
 	float angle_offset = aperture_opening;
 
 	float signed_distance = 0.f;

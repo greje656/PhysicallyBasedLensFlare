@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//#define DRAW2D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -131,12 +131,14 @@ std::vector<LensInterface> nikon_28_75mm_lens_interface;
 float x_dir = 0.f;
 float y_dir = 0.f;
 float aperture_opening = 5.f;
+float number_of_blades = 5.f;
 vec3 direction(0.f, 0.f, -1.f);
 
 bool left_mouse_down = false;
 bool spacebar_down = false;
 bool key_down = false;
 bool editing_aperture = false;
+bool editing_no_blades = false;
 bool editing_spread = false;
 bool editing_coating_quality = false;
 bool overlay_wireframe = false;
@@ -336,7 +338,8 @@ namespace Textures {
 	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
 	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
 
-	ID3D11SamplerState*       linear_sampler_state = nullptr;
+	ID3D11SamplerState*       linear_clamp_sampler = nullptr;
+	ID3D11SamplerState*       linear_wrap_sampler = nullptr;
 
 	void InitializeSamplers() {
 		D3D11_SAMPLER_DESC desc;
@@ -345,8 +348,12 @@ namespace Textures {
 		desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 		desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 		desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_clamp_sampler);
 
-		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_sampler_state);
+		desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_wrap_sampler);
 	}
 	
 
@@ -432,7 +439,8 @@ namespace Shaders {
 	ID3D11VertexShader*   vertexShader = nullptr;
 	ID3D11PixelShader*    pixelShader = nullptr;
 	ID3D11PixelShader*    toneMapPixelShader = nullptr;
-
+	ID3D11PixelShader*    visualizeStarburstPixelShader = nullptr;
+	
 	ID3D11VertexShader*   flareVertexShader = nullptr;
 	ID3D11PixelShader*    flarePixelShader = nullptr;
 	ID3D11PixelShader*    flarePixelShaderDebug = nullptr;
@@ -500,6 +508,10 @@ namespace Shaders {
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
+		blob->Release();
+
+		hr = CompileShaderFromFile(L"lens.hlsl", "PSVisualizeStarburst", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::visualizeStarburstPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSAperture", "ps_5_0", &blob);
@@ -696,7 +708,7 @@ namespace FFT {
 
 		pSRVs[0] = mTextureSRV[FFTTexture_Real0 + 2 * pass];
 		pSRVs[1] = mTextureSRV[FFTTexture_Imaginary0 + 2 * pass];
-		// pSRVs[2] = mButterflySRV[pass];
+		pSRVs[2] = mButterflySRV[pass];
 		pUAVs[0] = mTextureUAV[FFTTexture_Real0 + 2 * !pass];
 		pUAVs[1] = mTextureUAV[FFTTexture_Imaginary0 + 2 * !pass];
 
@@ -973,6 +985,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			if (!key_down && msg.wParam == 81)
 				editing_aperture = true;
 
+			if (!key_down && msg.wParam == 82)
+				editing_no_blades = true;
+
 			if (!key_down && msg.wParam == 87)
 				editing_spread = true;
 
@@ -1000,6 +1015,7 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		if (msg.message == WM_KEYUP) {
 			key_down = false;
 			editing_aperture = false;
+			editing_no_blades = false;
 			editing_spread = false;
 			editing_coating_quality = false;
 		}
@@ -1033,6 +1049,10 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			if (editing_aperture) {
 				aperture_opening = 5.f + ny * 5.f;
 				UpdateLensComponents();
+			}
+
+			if (editing_no_blades) {
+				number_of_blades = 10.f + ny * 5.f;
 			}
 
 			if (editing_spread) {
@@ -1502,6 +1522,9 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rec
 	context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 
 	context->Draw(6, 0);
+
+	g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
+
 }
 
 void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOAT4& color, XMFLOAT4& placement, bool filled) {
@@ -1778,7 +1801,7 @@ void UpdateGlobals() {
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
 		XMFLOAT4(direction.x, direction.y, direction.z, aperture_resolution),
-		XMFLOAT4(aperture_opening, 0,0,0)
+		XMFLOAT4(aperture_opening, number_of_blades,0,0)
 	};
 
 	g_pImmediateContext->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
@@ -1811,8 +1834,8 @@ void DrawStarBurst() {
 void Render() {
 
 	UpdateGlobals();
-	DrawStarBurst();
 	DrawAperture();
+	DrawStarBurst();
 
 	#if defined(DRAWLENSFLARE)
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
@@ -1834,7 +1857,7 @@ void Render() {
 		g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
 		g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
+		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
 
 		g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 		g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
@@ -1898,7 +1921,7 @@ void Render() {
 			g_pImmediateContext->ClearRenderTargetView(Views::renderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
 			g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-			g_pImmediateContext->CSSetShader(Shaders::computeShader, nullptr, 0);
+			g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 			g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
@@ -1908,7 +1931,7 @@ void Render() {
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 			g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
-			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_sampler_state);
+			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
 			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 			// Dispatch
@@ -1980,11 +2003,12 @@ void Render() {
 	
 	// Visualize the aperture texture:
 
-	//g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-	//g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	//g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
-	//g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	g_pImmediateContext->PSSetShader(Shaders::visualizeStarburstPixelShader, nullptr, 0);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 	
 	g_pSwapChain->Present(0, 0);
 	// SaveBackBuffer();
