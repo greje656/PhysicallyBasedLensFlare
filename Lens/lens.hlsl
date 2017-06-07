@@ -475,24 +475,66 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 	return float4(c, 1);
 }
 
+float3 wl2rgbTannenbaum(float w){
+	float3 r;
+
+	if(w < 350.0)
+		r = float3(0.5, 0.0, 1.0);
+	else if((w >= 350.0) && (w < 440.0))
+		r = float3((440.0 - w) / 90.0, 0.0, 1.0);
+	else if((w >= 440.0) && (w <= 490.0))
+		r = float3(0.0, (w - 440.0) / 50.0, 1.0);
+	else if((w >= 490.0) && (w < 510.0))
+		r = float3(0.0, 1.0, (-(w - 510.0)) / 20.0);
+	else if ((w >= 510.0) && (w < 580.0))
+		r = float3((w - 510.0) / 70.0, 1.0, 0.0);
+	else if((w >= 580.0) && (w < 645.0))
+		r = float3(1.0, (-(w - 645.0)) / 65.0, 0.0);
+	else
+		r = float3(1.0, 0.0, 0.0);
+	
+	if(w < 350.0)
+		r *= 0.3;
+	else if((w >= 350.0) && (w < 420.0))
+		r *= 0.3 + (0.7 * ((w - 350.0) / 70.0));
+	else if((w >= 420.0) && (w <= 700.0))
+		r *= 1.0;
+	else if((w > 700.0) && (w <= 780.0))
+		r *= 0.3 + (0.7 * ((780.0 - w) / 80.0));
+	else
+		r *= 0.3;
+
+	return r;
+}
+
 float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
+	float3x3 XYZ2SRGB = float3x3(
+		3.2404542, -1.5371385, -0.4985314,
+		-0.9692660, 1.8760108, 0.0415560,
+		0.0556434, -0.2040259, 1.0572252);
+
 	float ratio = backbuffer_size.x / backbuffer_size.y;
 	float2 uv = pos.xy / backbuffer_size - 0.5;
 	uv *= float2(ratio, 1);
-	
+
 	float3 result = 0;
 	float max_scale = 0.5;
 	int num_steps = 100;
+
 	for(int i = 0; i < num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
-		float2 scaled_uv = uv * (1.f + n * max_scale);
+		float2 scaled_uv = uv * (1.f - n * max_scale);
 
 		float r = hdr_texture.Sample(LinearSampler, scaled_uv).r;
 		float i = hdr_texture2.Sample(LinearSampler, scaled_uv).r;
 		float2 p = float2(r,i);
-		float v = saturate(pow(length(p), 2));
-		//float3 c = float3(v,v,v);
-		result += v;
+		float v = saturate(pow(length(p), 2)) * 2;
+
+		float lambda = lerp(350.f, 650.f, n);
+		float3 rgb = wl2rgbTannenbaum(lambda);
+		//rgb = mul(rgb, XYZ2SRGB);
+
+		result += v * rgb;
 	}
 	result /= (float)num_steps;
 
