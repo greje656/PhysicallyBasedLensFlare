@@ -273,6 +273,7 @@ XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 intersection_color1 = sRGB({   0.f,   0.f,   0.f, 0.1f });
 	XMFLOAT4 intersection_color2 = sRGB({  64.f, 215.f, 242.f, 0.5f });
 	XMFLOAT4 intersection_color3 = sRGB({ 179.f, 178.f, 210.f, 0.5f });
+	XMFLOAT4 black               = sRGB({   0.f,   0.f,   0.f, 0.5f });
 #endif
 
 inline XMFLOAT3 point_to_d3d(vec3& point) {
@@ -384,6 +385,7 @@ namespace Textures {
 		sr_view_desc.Texture2D.MostDetailedMip = 0;
 		sr_view_desc.Texture2D.MipLevels = 1;
 		hr = g_pd3dDevice->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
+
 	}
 
 	void InitializeDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
@@ -439,6 +441,7 @@ namespace Shaders {
 
 	ID3D11ComputeShader*  fftRowComputeShader = nullptr;
 	ID3D11ComputeShader*  fftColComputeShader = nullptr;
+	ID3D11ComputeShader*  fftCopyShader = nullptr;
 
 	ID3D11PixelShader*    aperture_ps_shader;
 
@@ -495,6 +498,14 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
 		blob->Release();
 
+		hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
+		blob->Release();
+
+		hr = CompileShaderFromFile(L"lens.hlsl", "PSAperture", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
+		blob->Release();
+
 		int butterfly_count = (int)(logf(aperture_resolution) / logf(2.0));
 		std::string resolution_string = std::to_string((int)aperture_resolution);
 		std::string butterfly_string = std::to_string(butterfly_count);
@@ -514,13 +525,190 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
+		hr = CompileShaderFromFile(L"copycs.hlsl", "CopyTextureCS", "cs_5_0", &blob);
+		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
 		blob->Release();
+	}
+}
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSAperture", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
-		blob->Release();
+namespace FFT {
+
+	enum FFTTextures {
+		FFTTexture_Real0,
+		FFTTexture_Imaginary0,
+		FFTTexture_Real1,
+		FFTTexture_Imaginary1,
+		FFTTexture_Count
+	};
+
+	ID3D11Texture2D *mTextures[FFTTexture_Count];
+	ID3D11UnorderedAccessView *mTextureUAV[FFTTexture_Count];
+	ID3D11ShaderResourceView *mTextureSRV[FFTTexture_Count];
+	ID3D11RenderTargetView *mRenderTargetViews[FFTTexture_Count];
+	ID3D11Texture2D *mButterflyTexture[2];
+	ID3D11ShaderResourceView *mButterflySRV[2];
+
+	const double M_PI = 3.1415926535897932384626433832795029;
+
+	void BitReverse(int *Indices, int N, int n) {
+		unsigned int mask = 0x1;
+		for (int j = 0; j < N; j++)
+		{
+			unsigned int val = 0x0;
+			int temp = int(Indices[j]);
+			for (int i = 0; i < n; i++)
+			{
+				unsigned int t = (mask & temp);
+				val = (val << 1) | t;
+				temp = temp >> 1;
+			}
+			Indices[j] = val;
+		}
+	}
+
+	void GetButterflyValues(int butterflyPass, int NumButterflies, int x, int *i1, int *i2, float *w1, float *w2) {
+		int sectionWidth = 2 << butterflyPass;
+		int halfSectionWidth = sectionWidth / 2;
+
+		int sectionStartOffset = x & ~(sectionWidth - 1);
+		int halfSectionOffset = x & (halfSectionWidth - 1);
+		int sectionOffset = x & (sectionWidth - 1);
+
+		*w1 = float(cosl(2.0*M_PI*sectionOffset / (float)sectionWidth));
+		*w2 = float(-sinl(2.0*M_PI*sectionOffset / (float)sectionWidth));
+
+		*i1 = sectionStartOffset + halfSectionOffset;
+		*i2 = sectionStartOffset + halfSectionOffset + halfSectionWidth;
+
+		if (butterflyPass == 0)
+		{
+			BitReverse(i1, 1, NumButterflies);
+			BitReverse(i2, 1, NumButterflies);
+		}
+	}
+
+	void BuildButterflyTexture(int butterflyType, int width) {
+		D3D11_SUBRESOURCE_DATA butterflyData;
+
+		int count = (int)(logf(float(width)) / logf(2.0));
+		int size = 4 * sizeof(float) * width * count;
+		float *butterflyBuffer = (float*)malloc(size);
+
+		for (int pass = 0; pass < count; pass++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				int i1, i2;
+				float w1, w2;
+				GetButterflyValues(pass, count, x, &i1, &i2, &w1, &w2);
+				float *writeLoc = &butterflyBuffer[pass * width * 4 + x * 4];
+				writeLoc[0] = (float)i1; // R
+				writeLoc[1] = (float)i2; // G
+				writeLoc[2] = w1; // B
+				writeLoc[3] = w2; // A
+			}
+		}
+
+		butterflyData.pSysMem = butterflyBuffer;
+		butterflyData.SysMemPitch = 4 * sizeof(float) * width;
+		butterflyData.SysMemSlicePitch = 0;
+
+		D3D11_TEXTURE2D_DESC textureDesc;
+		memset(&textureDesc, 0, sizeof(textureDesc));
+		textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		textureDesc.Width = width;
+		textureDesc.Height = count;
+		textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		textureDesc.MipLevels = 1;
+		textureDesc.ArraySize = 1;
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.SampleDesc.Quality = 0;
+		textureDesc.CPUAccessFlags = 0;
+		textureDesc.Usage = D3D11_USAGE_DEFAULT;
+		HRESULT hr = g_pd3dDevice->CreateTexture2D(&textureDesc, &butterflyData, &mButterflyTexture[butterflyType]);
+		hr = g_pd3dDevice->CreateShaderResourceView(mButterflyTexture[butterflyType], NULL, &mButterflySRV[butterflyType]);
+
+		free(butterflyBuffer);
+	}
+
+	void InitFFTTetxtures() {
+		BuildButterflyTexture(0, (int)aperture_resolution);
+		BuildButterflyTexture(1, (int)aperture_resolution);
+
+		D3D11_TEXTURE2D_DESC textureDesc;
+		memset(&textureDesc, 0, sizeof(textureDesc));
+		textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		textureDesc.Width = (UINT)aperture_resolution;
+		textureDesc.Height = (UINT)aperture_resolution;
+		textureDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+		textureDesc.MipLevels = 1;
+		textureDesc.ArraySize = 1;
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.SampleDesc.Quality = 0;
+		textureDesc.CPUAccessFlags = 0;
+		textureDesc.Usage = D3D11_USAGE_DEFAULT;
+
+		for (int i = 0; i < FFTTexture_Count; i++) {
+			textureDesc.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+			if (i == FFTTexture_Real0 || i == FFTTexture_Imaginary0) {
+				textureDesc.BindFlags = textureDesc.BindFlags | D3D11_BIND_RENDER_TARGET;
+			}
+
+			g_pd3dDevice->CreateTexture2D(&textureDesc, NULL, &mTextures[i]);
+			g_pd3dDevice->CreateUnorderedAccessView(mTextures[i], NULL, &mTextureUAV[i]);
+			g_pd3dDevice->CreateShaderResourceView(mTextures[i], NULL, &mTextureSRV[i]);
+
+		}
+
+		g_pd3dDevice->CreateRenderTargetView(mTextures[FFTTexture_Real0], NULL, &mRenderTargetViews[FFTTexture_Real0]);
+		g_pd3dDevice->CreateRenderTargetView(mTextures[FFTTexture_Imaginary0], NULL, &mRenderTargetViews[FFTTexture_Imaginary0]);
+	}
+
+	#define roundup(x,y) ( (int)y * (int)((x + y - 1)/y))
+	void CopyTextureNoStretch(ID3D11DeviceContext *context, ID3D11ShaderResourceView *srcSRV, ID3D11UnorderedAccessView *dstUAV, int size) {
+		ID3D11UnorderedAccessView* pClearUAVs[] = { NULL, NULL };
+		ID3D11ShaderResourceView* pClearSRVs[] = { NULL, NULL, NULL };
+
+		context->PSSetShaderResources(0, 3, pClearSRVs);
+		context->CSSetShaderResources(0, 1, pClearSRVs);
+		context->CSSetUnorderedAccessViews(0, 2, pClearUAVs, NULL);
+		context->CSSetShader(Shaders::fftCopyShader, NULL, 0);
+
+		float values[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		context->ClearUnorderedAccessViewFloat(dstUAV, values);
+		context->CSSetShaderResources(0, 1, &srcSRV);
+		context->CSSetUnorderedAccessViews(0, 1, &dstUAV, NULL);
+		int dispatchX = roundup(min(size, size) / 16, 16);
+		int dispatchY = roundup(min(size, size) / 16, 16);
+		context->Dispatch(dispatchX, dispatchY, 1);
+
+		context->CSSetShaderResources(0, 1, pClearSRVs);
+		context->CSSetUnorderedAccessViews(0, 2, pClearUAVs, NULL);
+	}
+
+	void RunDispatchSLM(ID3D11DeviceContext *context, int pass, ID3D11ComputeShader* shader) {
+		ID3D11UnorderedAccessView* pUAVs[] = { NULL, NULL };
+		ID3D11ShaderResourceView* pSRVs[] = { NULL, NULL, NULL };
+
+		context->CSSetShaderResources(0, 3, pSRVs);
+		context->CSSetUnorderedAccessViews(0, 2, pUAVs, NULL);
+		context->CSSetShader(shader, NULL, 0);
+
+		pSRVs[0] = mTextureSRV[FFTTexture_Real0 + 2 * pass];
+		pSRVs[1] = mTextureSRV[FFTTexture_Imaginary0 + 2 * pass];
+		// pSRVs[2] = mButterflySRV[pass];
+		pUAVs[0] = mTextureUAV[FFTTexture_Real0 + 2 * !pass];
+		pUAVs[1] = mTextureUAV[FFTTexture_Imaginary0 + 2 * !pass];
+
+		context->CSSetUnorderedAccessViews(0, 2, pUAVs, NULL);
+		context->CSSetShaderResources(0, 3, pSRVs);
+
+		context->Dispatch(1, (UINT)aperture_resolution, 1);
+
+		pSRVs[0] = NULL; pSRVs[1] = NULL; pSRVs[2] = NULL;
+		context->CSSetShaderResources(0, 3, pSRVs);
+		pUAVs[0] = NULL; pUAVs[1] = NULL;
+		context->CSSetUnorderedAccessViews(0, 2, pUAVs, NULL);
 	}
 }
 
@@ -1245,6 +1433,8 @@ HRESULT InitDevice()
 	Buffers::InitBuffers();
 	States::InitStates();
 
+	FFT::InitFFTTetxtures();
+
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
 	unit_patch = CreateUnitPatch(patch_tesselation);
@@ -1602,12 +1792,26 @@ void DrawAperture() {
 
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depth_buffer_view);
 }
+
+void DrawStarBurst() {
+	float clear_color[] = { 0,0,0,0 };
+	
+	// Setup input
+	FFT::CopyTextureNoStretch(g_pImmediateContext, Textures::aperture_sr_view, FFT::mTextureUAV[FFT::FFTTexture_Real0], (int)aperture_resolution);
+	g_pImmediateContext->ClearRenderTargetView(FFT::mRenderTargetViews[FFT::FFTTexture_Imaginary0], clear_color);
+
+	FFT::RunDispatchSLM(g_pImmediateContext, 0, Shaders::fftRowComputeShader);
+	FFT::RunDispatchSLM(g_pImmediateContext, 1, Shaders::fftColComputeShader);
+
+}
+
 //--------------------------------------------------------------------------------------
 // Render a frame
 //--------------------------------------------------------------------------------------
 void Render() {
 
 	UpdateGlobals();
+	DrawStarBurst();
 	DrawAperture();
 
 	#if defined(DRAWLENSFLARE)
