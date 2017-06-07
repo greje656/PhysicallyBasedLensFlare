@@ -477,13 +477,26 @@ float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 
 float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	float ratio = backbuffer_size.x / backbuffer_size.y;
-	float2 uv = pos.xy / backbuffer_size + 0.5;
+	float2 uv = pos.xy / backbuffer_size - 0.5;
 	uv *= float2(ratio, 1);
+	
+	float3 result = 0;
+	float max_scale = 0.5;
+	int num_steps = 100;
+	for(int i = 0; i < num_steps; ++i) {
+		float n = (float)i/(float)num_steps;
+		float2 scaled_uv = uv * (1.f + n * max_scale);
 
-	float r = hdr_texture.Sample(LinearSampler, uv).r;
-	float i = hdr_texture2.Sample(LinearSampler, uv).r;
-	float3 c = float3(r,i,0);
-	return float4(c, 1);
+		float r = hdr_texture.Sample(LinearSampler, scaled_uv).r;
+		float i = hdr_texture2.Sample(LinearSampler, scaled_uv).r;
+		float2 p = float2(r,i);
+		float v = saturate(pow(length(p), 2));
+		//float3 c = float3(v,v,v);
+		result += v;
+	}
+	result /= (float)num_steps;
+
+	return float4(result, 1);
 }
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
