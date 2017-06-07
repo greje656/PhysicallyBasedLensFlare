@@ -1913,7 +1913,6 @@ void Render() {
 	#endif
 	
 	// Visualize the aperture texture:
-
 	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
 	g_pImmediateContext->PSSetShader(Shaders::visualizeStarburstPixelShader, nullptr, 0);
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);

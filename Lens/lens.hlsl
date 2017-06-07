@@ -528,7 +528,7 @@ float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 		float r = hdr_texture.Sample(LinearSampler, scaled_uv).r;
 		float i = hdr_texture2.Sample(LinearSampler, scaled_uv).r;
 		float2 p = float2(r,i);
-		float v = saturate(pow(length(p), 2)) * 2;
+		float v = saturate(pow(length(p), 2) * 0.5);
 
 		float lambda = lerp(350.f, 650.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
@@ -536,8 +536,9 @@ float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 
 		result += v * rgb;
 	}
-	result /= (float)num_steps;
 
+	result *= 2.f;
+	result /= (float)num_steps;
 	return float4(result, 1);
 }
 
