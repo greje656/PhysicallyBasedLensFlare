@@ -557,96 +557,8 @@ namespace FFT {
 	ID3D11UnorderedAccessView *mTextureUAV[FFTTexture_Count];
 	ID3D11ShaderResourceView *mTextureSRV[FFTTexture_Count];
 	ID3D11RenderTargetView *mRenderTargetViews[FFTTexture_Count];
-	ID3D11Texture2D *mButterflyTexture[2];
-	ID3D11ShaderResourceView *mButterflySRV[2];
-
-	const double M_PI = 3.1415926535897932384626433832795029;
-
-	void BitReverse(int *Indices, int N, int n) {
-		unsigned int mask = 0x1;
-		for (int j = 0; j < N; j++)
-		{
-			unsigned int val = 0x0;
-			int temp = int(Indices[j]);
-			for (int i = 0; i < n; i++)
-			{
-				unsigned int t = (mask & temp);
-				val = (val << 1) | t;
-				temp = temp >> 1;
-			}
-			Indices[j] = val;
-		}
-	}
-
-	void GetButterflyValues(int butterflyPass, int NumButterflies, int x, int *i1, int *i2, float *w1, float *w2) {
-		int sectionWidth = 2 << butterflyPass;
-		int halfSectionWidth = sectionWidth / 2;
-
-		int sectionStartOffset = x & ~(sectionWidth - 1);
-		int halfSectionOffset = x & (halfSectionWidth - 1);
-		int sectionOffset = x & (sectionWidth - 1);
-
-		*w1 = float(cosl(2.0*M_PI*sectionOffset / (float)sectionWidth));
-		*w2 = float(-sinl(2.0*M_PI*sectionOffset / (float)sectionWidth));
-
-		*i1 = sectionStartOffset + halfSectionOffset;
-		*i2 = sectionStartOffset + halfSectionOffset + halfSectionWidth;
-
-		if (butterflyPass == 0)
-		{
-			BitReverse(i1, 1, NumButterflies);
-			BitReverse(i2, 1, NumButterflies);
-		}
-	}
-
-	void BuildButterflyTexture(int butterflyType, int width) {
-		D3D11_SUBRESOURCE_DATA butterflyData;
-
-		int count = (int)(logf(float(width)) / logf(2.0));
-		int size = 4 * sizeof(float) * width * count;
-		float *butterflyBuffer = (float*)malloc(size);
-
-		for (int pass = 0; pass < count; pass++)
-		{
-			for (int x = 0; x < width; x++)
-			{
-				int i1, i2;
-				float w1, w2;
-				GetButterflyValues(pass, count, x, &i1, &i2, &w1, &w2);
-				float *writeLoc = &butterflyBuffer[pass * width * 4 + x * 4];
-				writeLoc[0] = (float)i1; // R
-				writeLoc[1] = (float)i2; // G
-				writeLoc[2] = w1; // B
-				writeLoc[3] = w2; // A
-			}
-		}
-
-		butterflyData.pSysMem = butterflyBuffer;
-		butterflyData.SysMemPitch = 4 * sizeof(float) * width;
-		butterflyData.SysMemSlicePitch = 0;
-
-		D3D11_TEXTURE2D_DESC textureDesc;
-		memset(&textureDesc, 0, sizeof(textureDesc));
-		textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-		textureDesc.Width = width;
-		textureDesc.Height = count;
-		textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-		textureDesc.MipLevels = 1;
-		textureDesc.ArraySize = 1;
-		textureDesc.SampleDesc.Count = 1;
-		textureDesc.SampleDesc.Quality = 0;
-		textureDesc.CPUAccessFlags = 0;
-		textureDesc.Usage = D3D11_USAGE_DEFAULT;
-		HRESULT hr = g_pd3dDevice->CreateTexture2D(&textureDesc, &butterflyData, &mButterflyTexture[butterflyType]);
-		hr = g_pd3dDevice->CreateShaderResourceView(mButterflyTexture[butterflyType], NULL, &mButterflySRV[butterflyType]);
-
-		free(butterflyBuffer);
-	}
 
 	void InitFFTTetxtures() {
-		BuildButterflyTexture(0, (int)aperture_resolution);
-		BuildButterflyTexture(1, (int)aperture_resolution);
-
 		D3D11_TEXTURE2D_DESC textureDesc;
 		memset(&textureDesc, 0, sizeof(textureDesc));
 		textureDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -708,7 +620,6 @@ namespace FFT {
 
 		pSRVs[0] = mTextureSRV[FFTTexture_Real0 + 2 * pass];
 		pSRVs[1] = mTextureSRV[FFTTexture_Imaginary0 + 2 * pass];
-		pSRVs[2] = mButterflySRV[pass];
 		pUAVs[0] = mTextureUAV[FFTTexture_Real0 + 2 * !pass];
 		pUAVs[1] = mTextureUAV[FFTTexture_Imaginary0 + 2 * !pass];
 
