@@ -18,4 +18,12 @@
   <ItemGroup>
     <ClCompile Include="lens.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="dust.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="directx.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
 </Project>

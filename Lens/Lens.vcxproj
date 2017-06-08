@@ -355,6 +355,8 @@
     <ResourceCompile Include="Lens.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="directx.ico" />
+    <Image Include="dust.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

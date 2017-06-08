@@ -68,8 +68,8 @@ cbuffer GhostData : register(b2) {
 };
 
 // Bounded buffers
-Texture2D hdr_texture : register(t1);
-Texture2D hdr_texture2 : register(t2);
+Texture2D input_texture1 : register(t1);
+Texture2D input_texture2 : register(t2);
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
 RWStructuredBuffer<LensInterface> lens_interface : register(u1);
@@ -429,7 +429,7 @@ float4 PS(in PSInput input) : SV_Target {
 	float4 mask = input.mask;
 
 	float2 aperture_uv = (color.xy + 1.f)/2.f;
-	float aperture = hdr_texture.Sample(LinearSampler, aperture_uv).r;
+	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).r;
 	
 	float fade = 0.2;
 	float lens_distance = length(mask.xy);
@@ -470,8 +470,8 @@ float3 ACESFilm(float3 x) {
 }
 
 float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
-	float3 c = hdr_texture.Load(int3(pos.xy,0)).rgb;
-	c = ACESFilm(c);
+	float3 c = input_texture1.Load(int3(pos.xy,0)).rgb;
+	//c = ACESFilm(c);
 	return float4(c, 1);
 }
 
@@ -525,8 +525,8 @@ float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * (1.f - n * max_scale);
 
-		float r = hdr_texture.Sample(LinearSampler, scaled_uv).r;
-		float i = hdr_texture2.Sample(LinearSampler, scaled_uv).r;
+		float r = input_texture1.Sample(LinearSampler, scaled_uv).r;
+		float i = input_texture2.Sample(LinearSampler, scaled_uv).r;
 		float2 p = float2(r,i);
 		float v = saturate(pow(length(p), 2) * 0.5);
 
@@ -582,7 +582,12 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		float c = min(a,b) * 2.f;
 		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
 		float rings = pow(t*c, 1.f);
-		aperture_mask = aperture_mask + abs(rings) * 0.125;
+		aperture_mask = aperture_mask + rings * 0.125;
+	}
+
+	{ // Dust
+		float dust = input_texture1.Sample(LinearSampler, uv).r;
+		aperture_mask *= saturate(dust + 0.98);
 	}
 
 	return float4(aperture_mask, aperture_mask, aperture_mask, 1);

@@ -331,9 +331,12 @@ namespace Views {
 namespace Textures {
 	ID3D11Texture2D*          depthStencil = nullptr;
 	ID3D11Texture2D*          HDRTexture = nullptr;
+	ID3D11Texture2D*          dust = nullptr;
 	ID3D11Texture2D*          aperture = nullptr;
 	ID3D11Texture2D*          aperture_depth_buffer = nullptr;
 
+	ID3D11RenderTargetView*   dust_rt_view = nullptr;
+	ID3D11ShaderResourceView* dust_sr_view = nullptr;
 	ID3D11RenderTargetView*   aperture_rt_view = nullptr;
 	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
 	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
@@ -358,7 +361,7 @@ namespace Textures {
 	
 
 	void initTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
-		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view) {
+		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view, D3D11_SUBRESOURCE_DATA* data = nullptr) {
 		
 		HRESULT hr;
 
@@ -375,9 +378,8 @@ namespace Textures {
 		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
-		hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &texture);
+		hr = g_pd3dDevice->CreateTexture2D(&desc, data, &texture);
 
-		// Create the HDR view
 		D3D11_RENDER_TARGET_VIEW_DESC rt_view_desc;
 		ZeroMemory(&rt_view_desc, sizeof(rt_view_desc));
 		rt_view_desc.Format = rt_view_desc.Format;
@@ -432,6 +434,18 @@ namespace Textures {
 		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
 		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthStencil, Views::depthStencilView);
 		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depth_buffer, Textures::aperture_depth_buffer_view);
+
+		HBITMAP bitmap = LoadBitmap(g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
+		int size = 512 * 512 * 4;
+		void* bitmap_data = malloc(size);
+		GetBitmapBits(bitmap, size, bitmap_data);
+		
+		D3D11_SUBRESOURCE_DATA resource_data;
+		resource_data.pSysMem = bitmap_data;
+		resource_data.SysMemPitch = 512 * 4;
+		resource_data.SysMemSlicePitch = 512* 512 * 4;
+		
+		Textures::initTexture(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
 	}
 }
 
@@ -1721,10 +1735,15 @@ void UpdateGlobals() {
 void DrawAperture() {
 	g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
 	g_pImmediateContext->PSSetShader(Shaders::aperture_ps_shader, nullptr, 0);
+	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
+	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
+
 	g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depth_buffer_view);
+
+	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 }
 
 void DrawStarBurst() {
@@ -1911,12 +1930,21 @@ void Render() {
 			DrawLensInterface(nikon_28_75mm_lens_interface);
 		}
 	#endif
-	
+
 	// Visualize the aperture texture:
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+
+	// Visualize the dust texture:
+	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
+
+	// Visualize the starburst texture:
 	g_pImmediateContext->PSSetShader(Shaders::visualizeStarburstPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
+
+	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
 	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 	
