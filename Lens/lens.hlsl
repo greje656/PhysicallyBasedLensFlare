@@ -59,7 +59,8 @@ cbuffer GlobalData : register(b1) {
 
 	float aperture_opening;
 	float number_of_blades;
-	float2 padding;
+	float starburst_resolution;
+	float padding;
 };
 
 cbuffer GhostData : register(b2) {
@@ -429,7 +430,7 @@ float4 PS(in PSInput input) : SV_Target {
 	float4 mask = input.mask;
 
 	float2 aperture_uv = (color.xy + 1.f)/2.f;
-	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).r;
+	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).g;
 	
 	float fade = 0.2;
 	float lens_distance = length(mask.xy);
@@ -517,45 +518,46 @@ float n1rand( float2 n ) {
 	return nrnd0;
 }
 
-float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
-	float3x3 XYZ2SRGB = float3x3(
-		3.2404542, -1.5371385, -0.4985314,
-		-0.9692660, 1.8760108, 0.0415560,
-		0.0556434, -0.2040259, 1.0572252);
+float4 PSStarburst(float4 pos : SV_POSITION ) : SV_Target {
 
-	float ratio = backbuffer_size.x / backbuffer_size.y;
-	float2 uv = pos.xy / backbuffer_size - 0.5;
-	uv *= float2(ratio, 1);
+	float2 uv = pos.xy / starburst_resolution - 0.5;
 
 	float nvalue = n1rand(uv);
 
 	float3 result = 0;
 	int num_steps = 256;
 
-	float scale = 0.9 + nvalue * 0.2;
+	// -ve violet, +v reds
+	float scale = 1;// + nvalue * 0.2;
 	[loop]
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
 		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
-		float3 r = input_texture1.Sample(LinearSampler, scaled_uv).rgb * !clamped;
-		float3 i = input_texture2.Sample(LinearSampler, scaled_uv).rgb * !clamped;
-		float2 p = float2(r.x, i.x);
 
-		float v = saturate(pow(length(p), 2.f));
+		float r = input_texture1.Sample(LinearSampler, scaled_uv).r * !clamped;
+		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
+		float2 p = float2(r, i);
 
-		float start_color = saturate(n-0.2)/0.8;
-		float lambda = lerp(350.f, 650.f, start_color);
+		float v = pow(length(p), 2.f);
+
+		float lambda = lerp(350.f, 650.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
-		rgb = lerp(1, rgb * 3.f, saturate(start_color + 0.2));
 		result += v * rgb;
 	}
 
 	result /= (float)num_steps;
-	result *= 2;
 	result.rgb = ACESFilm(result.rgb);
 
 	return float4(result, 1);
+}
+
+float fade_aperture_edge(float radius, float fade, float signed_distance) {
+	float l = radius;
+	float u = radius + fade;
+	float s = u - l;
+	float c = 1.f - saturate(saturate(signed_distance - l)/s);
+	return smoothstep(0, 1, c);
 }
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
@@ -573,19 +575,8 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
 
-	float aperture_mask = 1.f;
-	
-	{ // Polygon shape
-		float radius = 0.75;
-		float fade = 0.05;
-
-		float l = radius;
-		float u = radius + fade;
-		float s = u - l;
-		float c = 1.f - saturate(saturate(signed_distance - l)/s);
-
-		aperture_mask = smoothstep(0, 1, c);
-	}
+	float aperture_fft = fade_aperture_edge(0.5, 0.2, signed_distance);
+	float aperture_mask = fade_aperture_edge(0.75, 0.05, signed_distance);
 
 	{ // Diffraction rings
 		float w = 0.1;
@@ -598,15 +589,16 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		float c = min(a,b) * 2.f;
 		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
 		float rings = pow(t*c, 1.f);
-		//aperture_mask = aperture_mask + rings * 0.125;
+		aperture_mask = aperture_mask + rings * 0.125;
 	}
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_mask *= saturate(dust + 0.996);
+		aperture_fft *= saturate(dust + 0.992);
+		aperture_mask *= saturate(dust + 0.95);
 	}
 
-	float3 rgb = wl2rgbTannenbaum(575) * aperture_mask;
+	float3 rgb = float3(aperture_fft, aperture_mask, 0);
 
 	return float4(rgb, 1);
 }

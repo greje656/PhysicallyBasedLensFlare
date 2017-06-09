@@ -217,6 +217,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
+float starburst_resolution = 1024;
 float coating_quality = 0.0;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
@@ -333,6 +334,7 @@ namespace Textures {
 	ID3D11Texture2D*          HDRTexture = nullptr;
 	ID3D11Texture2D*          dust = nullptr;
 	ID3D11Texture2D*          aperture = nullptr;
+	ID3D11Texture2D*          starburst = nullptr;
 	ID3D11Texture2D*          aperture_depth_buffer = nullptr;
 
 	ID3D11RenderTargetView*   dust_rt_view = nullptr;
@@ -340,6 +342,10 @@ namespace Textures {
 	ID3D11RenderTargetView*   aperture_rt_view = nullptr;
 	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
 	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
+
+	ID3D11RenderTargetView*   starburst_rt_view = nullptr;
+	ID3D11ShaderResourceView* starburst_sr_view = nullptr;
+	ID3D11DepthStencilView*   starburst_depth_buffer_view = nullptr;
 
 	ID3D11SamplerState*       linear_clamp_sampler = nullptr;
 	ID3D11SamplerState*       linear_wrap_sampler = nullptr;
@@ -432,8 +438,10 @@ namespace Textures {
 
 		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::HDRTexture, Views::shaderHDRView, Views::HDRView);
 		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
+		Textures::initTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
 		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthStencil, Views::depthStencilView);
 		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depth_buffer, Textures::aperture_depth_buffer_view);
+		Textures::InitializeDepthBuffer((int)starburst_resolution, (int)starburst_resolution, Textures::aperture_depth_buffer, Textures::starburst_depth_buffer_view);
 
 		HBITMAP bitmap = LoadBitmap(g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
 		int size = 512 * 512 * 4;
@@ -453,7 +461,7 @@ namespace Shaders {
 	ID3D11VertexShader*   vertexShader = nullptr;
 	ID3D11PixelShader*    pixelShader = nullptr;
 	ID3D11PixelShader*    toneMapPixelShader = nullptr;
-	ID3D11PixelShader*    visualizeStarburstPixelShader = nullptr;
+	ID3D11PixelShader*    starburstPixelShader = nullptr;
 	
 	ID3D11VertexShader*   flareVertexShader = nullptr;
 	ID3D11PixelShader*    flarePixelShader = nullptr;
@@ -524,8 +532,8 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSVisualizeStarburst", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::visualizeStarburstPixelShader);
+		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburst", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSAperture", "ps_5_0", &blob);
@@ -1726,7 +1734,7 @@ void UpdateGlobals() {
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
 		XMFLOAT4(direction.x, direction.y, direction.z, aperture_resolution),
-		XMFLOAT4(aperture_opening, number_of_blades,0,0)
+		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution,0)
 	};
 
 	g_pImmediateContext->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
@@ -1940,12 +1948,12 @@ void Render() {
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
 
 	// Visualize the starburst texture:
-	g_pImmediateContext->PSSetShader(Shaders::visualizeStarburstPixelShader, nullptr, 0);
+	g_pImmediateContext->PSSetShader(Shaders::starburstPixelShader, nullptr, 0);
 	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
 
 	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
 	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 	
 	g_pSwapChain->Present(0, 0);
