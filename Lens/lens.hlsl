@@ -1,4 +1,6 @@
 #define PI 3.14159265359f
+#define TWOPI PI * 2.f
+
 #define NANO_METER 0.0000001
 #define NUM_THREADS 32
 
@@ -528,8 +530,7 @@ float4 PSStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	int num_steps = 256;
 
 	// -ve violet, +v reds
-	float scale = 1;// + nvalue * 0.2;
-	[loop]
+	float scale = 1 + nvalue * 0.1;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
@@ -547,7 +548,46 @@ float4 PSStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	}
 
 	result /= (float)num_steps;
-	result.rgb = ACESFilm(result.rgb);
+
+	return float4(result, 1);
+}
+
+float2 rotate(float2 p, float a) {
+	float x = p.x;
+	float y = p.y;
+
+	float cosa = cos(a);
+	float sina = sin(a);
+
+	float x1 = x * cosa - y * sina;
+	float y1 = y * cosa + x * sina;
+
+	return float2(x1, y1);
+}
+
+float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
+	float2 uv = pos.xy / starburst_resolution - 0.5;
+
+	float3 result = 0;
+	int num_steps = 256;
+	
+	for(int i = 0; i <= num_steps; ++i){
+		float n = (float)i/(float)num_steps;
+		float a = n * TWOPI * 5;
+		float2 spiral = float2(cos(a), sin(a)) * n * 0.0005;
+		float2 jittered_uv = uv + spiral;
+		float2 scaled_uv = jittered_uv;
+
+		float2 rotated_uv = rotate(scaled_uv, n * 0.1);
+		scaled_uv = rotated_uv;
+		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
+
+		float3 rgb = input_texture1.Sample(LinearSampler, scaled_uv + 0.5).rgb * !clamped;
+		result += rgb;
+	}
+
+	result /= (float)num_steps;
+	result = ACESFilm(result);
 
 	return float4(result, 1);
 }
@@ -594,7 +634,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_fft *= saturate(dust + 0.992);
+		aperture_fft *= saturate(dust + 0.995);
 		aperture_mask *= saturate(dust + 0.95);
 	}
 
