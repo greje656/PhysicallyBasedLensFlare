@@ -471,7 +471,7 @@ float3 ACESFilm(float3 x) {
 
 float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
 	float3 c = input_texture1.Load(int3(pos.xy,0)).rgb;
-	//c = ACESFilm(c);
+	c = ACESFilm(c);
 	return float4(c, 1);
 }
 
@@ -518,27 +518,37 @@ float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	uv *= float2(ratio, 1);
 
 	float3 result = 0;
-	float max_scale = 0.5;
-	int num_steps = 100;
+	int num_steps = 128;
 
-	for(int i = 0; i < num_steps; ++i) {
+	float v = 0.6;
+	[loop]
+	for(int i = 1; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
-		float2 scaled_uv = uv * (1.f - n * max_scale);
+		float2 scaled_uv = uv * lerp(1.0 + v,1.0, n);
+		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
+		float3 r = input_texture1.Sample(LinearSampler, scaled_uv).rgb * !clamped;
+		float3 i = input_texture2.Sample(LinearSampler, scaled_uv).rgb * !clamped;
+		float2 p = float2(r.r,i.r);
+		float v = 0;
 
-		float r = input_texture1.Sample(LinearSampler, scaled_uv).r;
-		float i = input_texture2.Sample(LinearSampler, scaled_uv).r;
-		float2 p = float2(r,i);
-		float v = saturate(pow(length(p), 2) * 0.5);
-
-		float lambda = lerp(350.f, 650.f, n);
+		v = saturate(pow(length(p), 2) - 0.001);
+		float b1 = saturate(n - 0.5)/0.5;
+		float b2 = saturate(n - 0.8)/0.2;
+		float lambda = lerp(330.f, 770.f, b1);
 		float3 rgb = wl2rgbTannenbaum(lambda);
+		rgb = lerp(1, rgb, b2);
 		//rgb = mul(rgb, XYZ2SRGB);
 
 		result += v * rgb;
 	}
 
-	result *= 2.f;
+	result *= 4.f;
 	result /= (float)num_steps;
+
+	[branch]
+	if(uv.x > 0)
+		result.rgb = ACESFilm(result.rgb * 2);
+
 	return float4(result, 1);
 }
 
@@ -587,8 +597,10 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_mask *= saturate(dust + 0.98);
+		//aperture_mask *= saturate(dust + 0.98);
 	}
 
-	return float4(aperture_mask, aperture_mask, aperture_mask, 1);
+	float3 rgb = aperture_mask;//wl2rgbTannenbaum(575) * aperture_mask;
+
+	return float4(rgb, 1);
 }
