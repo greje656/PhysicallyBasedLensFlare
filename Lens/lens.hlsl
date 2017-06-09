@@ -507,6 +507,16 @@ float3 wl2rgbTannenbaum(float w){
 	return r;
 }
 
+float nrand( float2 n ) {
+	return frac(sin(dot(n.xy, float2(12.9898, 78.233)))* 43758.5453);
+}
+
+float n1rand( float2 n ) {
+	float t = frac( 0 );
+	float nrnd0 = nrand( n + 0.07*t );
+	return nrnd0;
+}
+
 float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	float3x3 XYZ2SRGB = float3x3(
 		3.2404542, -1.5371385, -0.4985314,
@@ -517,37 +527,33 @@ float4 PSVisualizeStarburst(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / backbuffer_size - 0.5;
 	uv *= float2(ratio, 1);
 
-	float3 result = 0;
-	int num_steps = 128;
+	float nvalue = n1rand(uv);
 
-	float v = 0.6;
+	float3 result = 0;
+	int num_steps = 256;
+
+	float scale = 0.9 + nvalue * 0.2;
 	[loop]
-	for(int i = 1; i <= num_steps; ++i) {
+	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
-		float2 scaled_uv = uv * lerp(1.0 + v,1.0, n);
+		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
 		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
 		float3 r = input_texture1.Sample(LinearSampler, scaled_uv).rgb * !clamped;
 		float3 i = input_texture2.Sample(LinearSampler, scaled_uv).rgb * !clamped;
-		float2 p = float2(r.r,i.r);
-		float v = 0;
+		float2 p = float2(r.x, i.x);
 
-		v = saturate(pow(length(p), 2) - 0.001);
-		float b1 = saturate(n - 0.5)/0.5;
-		float b2 = saturate(n - 0.8)/0.2;
-		float lambda = lerp(330.f, 770.f, b1);
+		float v = saturate(pow(length(p), 2.f));
+
+		float start_color = saturate(n-0.2)/0.8;
+		float lambda = lerp(350.f, 650.f, start_color);
 		float3 rgb = wl2rgbTannenbaum(lambda);
-		rgb = lerp(1, rgb, b2);
-		//rgb = mul(rgb, XYZ2SRGB);
-
+		rgb = lerp(1, rgb * 3.f, saturate(start_color + 0.2));
 		result += v * rgb;
 	}
 
-	result *= 4.f;
 	result /= (float)num_steps;
-
-	[branch]
-	if(uv.x > 0)
-		result.rgb = ACESFilm(result.rgb * 2);
+	result *= 2;
+	result.rgb = ACESFilm(result.rgb);
 
 	return float4(result, 1);
 }
@@ -592,15 +598,15 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		float c = min(a,b) * 2.f;
 		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
 		float rings = pow(t*c, 1.f);
-		aperture_mask = aperture_mask + rings * 0.125;
+		//aperture_mask = aperture_mask + rings * 0.125;
 	}
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		//aperture_mask *= saturate(dust + 0.98);
+		aperture_mask *= saturate(dust + 0.996);
 	}
 
-	float3 rgb = aperture_mask;//wl2rgbTannenbaum(575) * aperture_mask;
+	float3 rgb = wl2rgbTannenbaum(575) * aperture_mask;
 
 	return float4(rgb, 1);
 }
