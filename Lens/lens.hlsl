@@ -20,6 +20,11 @@ struct PSInput {
 	float4 reflectance : TEXCOORD2;
 };
 
+struct StarbustInput {
+	float4 pos : SV_POSITION;
+	float2 uv : TEXCOORD0;
+};
+
 struct Intersection {
 	float3 pos;
 	float3 norm;
@@ -515,14 +520,49 @@ float nrand( float2 n ) {
 }
 
 float n1rand( float2 n ) {
-	float t = frac( 0 );
-	float nrnd0 = nrand( n + 0.07*t );
+	float t = frac(0);
+	float nrnd0 = nrand(n + 0.07f * t);
 	return nrnd0;
 }
 
-float4 PSStarburst(float4 pos : SV_POSITION ) : SV_Target {
+float3 intersectPlane(float3 n, float3 p0, float3 l0, float3 l) { 
+    // assuming vectors are all normalized
+    float denom = dot(n, l); 
+    if (denom > 1e-6) { 
+        float3 p0l0 = p0 - l0; 
+        float t = dot(p0l0, n) / denom; 
+        return p0 + l * t;
+    } 
+ 
+    return 0; 
+} 
 
-	float2 uv = pos.xy / starburst_resolution - 0.5;
+StarbustInput VSStarburst(float4 pos : POSITION ) {
+	StarbustInput result;
+	
+	result.pos = float4(pos.xy * 0.5f, 0.f, 1.f);
+	result.pos.xy *= 0.5;
+
+	float3 n = float3(0, 0, -1);
+	float3 p0 = float3(0, 0, 10);
+	float3 l0 = float3(0, 0, 0);
+	float3 c = intersectPlane(n, p0, l0, light_dir);
+
+	result.pos.xy += c.xy;
+
+	result.uv = (pos.xy + float2(1.f, 2.f)) * float2(0.5f, 0.25f);
+
+	return result;
+}
+
+float4 PSStarburst(StarbustInput input) : SV_Target {
+	float3 starburst = input_texture1.Sample(LinearSampler, input.uv).rgb;
+	return float4(starburst, 1.f);
+}
+
+float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
+
+	float2 uv = pos.xy / starburst_resolution - 0.5f;
 
 	float nvalue = n1rand(uv);
 
@@ -587,7 +627,6 @@ float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
 	}
 
 	result /= (float)num_steps;
-	result = ACESFilm(result);
 
 	return float4(result, 1);
 }

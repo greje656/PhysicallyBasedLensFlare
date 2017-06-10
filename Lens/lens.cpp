@@ -465,7 +465,10 @@ namespace Shaders {
 	ID3D11VertexShader*   vertexShader = nullptr;
 	ID3D11PixelShader*    pixelShader = nullptr;
 	ID3D11PixelShader*    toneMapPixelShader = nullptr;
+
+	ID3D11VertexShader*   starburstVertexShader = nullptr;
 	ID3D11PixelShader*    starburstPixelShader = nullptr;
+	ID3D11PixelShader*    starburstFromFFTPixelShader = nullptr;
 	ID3D11PixelShader*    starburstFilterPixelShader = nullptr;
 
 	ID3D11VertexShader*   flareVertexShader = nullptr;
@@ -537,8 +540,16 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
 		blob->Release();
 
+		hr = CompileShaderFromFile(L"lens.hlsl", "VSStarburst", "vs_5_0", &blob);
+		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
+		blob->Release();
+
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburst", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
+		blob->Release();
+
+		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
@@ -1773,6 +1784,19 @@ void DrawStarBurst() {
 	FFT::RunDispatchSLM(g_pImmediateContext, 0, Shaders::fftRowComputeShader);
 	FFT::RunDispatchSLM(g_pImmediateContext, 1, Shaders::fftColComputeShader);
 
+	g_pImmediateContext->PSSetShader(Shaders::starburstFromFFTPixelShader, nullptr, 0);
+	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
+	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+
+	g_pImmediateContext->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
+	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
+	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1837,6 +1861,27 @@ void Render() {
 
 			bounce1++;
 		}
+
+
+
+
+		g_pImmediateContext->VSSetShader(Shaders::starburstVertexShader, nullptr, 0);
+		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
+		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+		g_pImmediateContext->PSSetShader(Shaders::starburstPixelShader, nullptr, 0);
+		g_pImmediateContext->RSSetState(States::rasterStateCull);
+
+		g_pImmediateContext->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
+
+		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
+		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_square.vertices, &stride, &offset);
+		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+
+		g_pImmediateContext->Draw(6, 0);
+
+
+
 
 		g_pImmediateContext->RSSetState(States::rasterStateCull);
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
@@ -1955,22 +2000,6 @@ void Render() {
 	// Visualize the dust texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
-
-	// Visualize the starburst texture:
-	g_pImmediateContext->PSSetShader(Shaders::starburstPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
-
-	g_pImmediateContext->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
-
 
 	g_pSwapChain->Present(0, 0);
 	// SaveBackBuffer();
