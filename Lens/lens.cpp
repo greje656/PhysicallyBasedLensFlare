@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
