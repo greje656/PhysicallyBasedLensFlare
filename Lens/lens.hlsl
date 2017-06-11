@@ -1,5 +1,6 @@
 #define PI 3.14159265359f
 #define TWOPI PI * 2.f
+#define INCOMING_LIGHT_TEMP 6000.f
 
 #define NANO_METER 0.0000001
 #define NUM_THREADS 32
@@ -463,7 +464,7 @@ float4 PS(in PSInput input) : SV_Target {
 		return float4(alpha, alpha, alpha ,1);
 	#endif
 
-	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(6000);
+	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(INCOMING_LIGHT_TEMP);
 	
 	return float4(v, 1.f);
 }
@@ -539,6 +540,7 @@ float3 intersectPlane(float3 n, float3 p0, float3 l0, float3 l) {
 
 StarbustInput VSStarburst(float4 pos : POSITION ) {
 	StarbustInput result;
+
 	float ratio = backbuffer_size.x / backbuffer_size.y;
 
 	result.pos = float4(pos.xy * 0.5f, 0.f, 1.f);
@@ -552,16 +554,18 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 	result.pos.xy += c.xy * float2(0.5, 1);
 
 	result.uv.xy = (pos.xy + float2(1.f, 1.f)) * float2(0.5f, 0.5f);
-	result.uv.z = 1.f - saturate(light_dir.x * 4.f);
-	result.uv.z *= 4;
+	result.uv.z = 1.f - saturate(light_dir.x * 10.f);
+	result.uv.z *= 1;
 	return result;
 }
 
 float4 PSStarburst(StarbustInput input) : SV_Target {
+
 	float2 uv = input.uv.xy;
 	float intensity = input.uv.z;
 
 	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
+	starburst *= TemperatureToColor(INCOMING_LIGHT_TEMP);
 
 	return float4(starburst, 1.f);
 }
