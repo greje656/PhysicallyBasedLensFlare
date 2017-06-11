@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -217,7 +217,7 @@ int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
 float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
-float starburst_resolution = 1024;
+float starburst_resolution = 2056;
 float coating_quality = 0.0;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
@@ -1070,8 +1070,8 @@ LensShapes::Rectangle CreateUnitRectangle() {
 
 	float l = -1.f;
 	float r =  1.f;
-	float b = -1.f / ratio;
-	float t =  1.f / ratio;
+	float b = -1.f;
+	float t =  1.f;
 
 	SimpleVertex vertices[] = {
 		XMFLOAT3(l, b, 0.f),
@@ -1784,6 +1784,15 @@ void DrawStarBurst() {
 	FFT::RunDispatchSLM(g_pImmediateContext, 0, Shaders::fftRowComputeShader);
 	FFT::RunDispatchSLM(g_pImmediateContext, 1, Shaders::fftColComputeShader);
 
+	D3D11_VIEWPORT vp;
+	vp.Width = (FLOAT)starburst_resolution;
+	vp.Height = (FLOAT)starburst_resolution;
+	vp.MinDepth = 0.f;
+	vp.MaxDepth = 1.f;
+	vp.TopLeftX = 0.f;
+	vp.TopLeftY = 0.f;
+	g_pImmediateContext->RSSetViewports(1, &vp);
+
 	g_pImmediateContext->PSSetShader(Shaders::starburstFromFFTPixelShader, nullptr, 0);
 	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
 	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
@@ -1797,6 +1806,10 @@ void DrawStarBurst() {
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
 	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+
+	vp.Width = (FLOAT)backbuffer_width;
+	vp.Height = (FLOAT)backbuffer_height;
+	g_pImmediateContext->RSSetViewports(1, &vp);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1995,8 +2008,9 @@ void Render() {
 
 	// Visualize the aperture texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-
+	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
+	// DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+		
 	// Visualize the dust texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);

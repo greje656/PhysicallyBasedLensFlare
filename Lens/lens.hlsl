@@ -22,7 +22,7 @@ struct PSInput {
 
 struct StarbustInput {
 	float4 pos : SV_POSITION;
-	float2 uv : TEXCOORD0;
+	float3 uv : TEXCOORD0;
 };
 
 struct Intersection {
@@ -539,38 +539,43 @@ float3 intersectPlane(float3 n, float3 p0, float3 l0, float3 l) {
 
 StarbustInput VSStarburst(float4 pos : POSITION ) {
 	StarbustInput result;
-	
+	float ratio = backbuffer_size.x / backbuffer_size.y;
+
 	result.pos = float4(pos.xy * 0.5f, 0.f, 1.f);
-	result.pos.xy *= 0.5;
+	result.pos.xy *= float2(1, ratio);
 
 	float3 n = float3(0, 0, -1);
-	float3 p0 = float3(0, 0, 10);
+	float3 p0 = float3(0, 0, 20);
 	float3 l0 = float3(0, 0, 0);
 	float3 c = intersectPlane(n, p0, l0, light_dir);
+	float intensity = dot(normalize(light_dir), float3(0,0,-1));
+	result.pos.xy += c.xy * float2(0.5, 1);
 
-	result.pos.xy += c.xy;
-
-	result.uv = (pos.xy + float2(1.f, 2.f)) * float2(0.5f, 0.25f);
-
+	result.uv.xy = (pos.xy + float2(1.f, 1.f)) * float2(0.5f, 0.5f);
+	result.uv.z = 1.f - saturate(light_dir.x * 4.f);
+	result.uv.z *= 4;
 	return result;
 }
 
 float4 PSStarburst(StarbustInput input) : SV_Target {
-	float3 starburst = input_texture1.Sample(LinearSampler, input.uv).rgb;
+	float2 uv = input.uv.xy;
+	float intensity = input.uv.z;
+
+	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
+
 	return float4(starburst, 1.f);
 }
 
 float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 
-	float2 uv = pos.xy / starburst_resolution - 0.5f;
-
+	float2 uv = pos.xy / starburst_resolution - 0.5;
 	float nvalue = n1rand(uv);
 
 	float3 result = 0;
 	int num_steps = 256;
 
 	// -ve violet, +v reds
-	float scale = 1 + nvalue * 0.1;
+	float scale = -0.5f + nvalue * 0.1;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
@@ -580,10 +585,12 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
 		float2 p = float2(r, i);
 
-		float v = pow(length(p), 2.f);
+		float v = pow(length(p), 2.f) * 0.0001;
 
-		float lambda = lerp(350.f, 650.f, n);
+		float start_fade_to_color = n;//saturate(n-0.5)/0.5;
+		float lambda = lerp(350.f, 650.f, start_fade_to_color);
 		float3 rgb = wl2rgbTannenbaum(lambda);
+		rgb = lerp(rgb, rgb, start_fade_to_color);
 		result += v * rgb;
 	}
 
@@ -609,16 +616,16 @@ float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / starburst_resolution - 0.5;
 
 	float3 result = 0;
-	int num_steps = 256;
+	int num_steps = 4;
 	
 	for(int i = 0; i <= num_steps; ++i){
 		float n = (float)i/(float)num_steps;
 		float a = n * TWOPI * 5;
-		float2 spiral = float2(cos(a), sin(a)) * n * 0.0005;
+		float2 spiral = float2(cos(a), sin(a)) * n * 0.01;
 		float2 jittered_uv = uv + spiral;
 		float2 scaled_uv = jittered_uv;
 
-		float2 rotated_uv = rotate(scaled_uv, n * 0.1);
+		float2 rotated_uv = rotate(scaled_uv, n * 0.05);
 		scaled_uv = rotated_uv;
 		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
 
@@ -638,6 +645,12 @@ float fade_aperture_edge(float radius, float fade, float signed_distance) {
 	float c = 1.f - saturate(saturate(signed_distance - l)/s);
 	return smoothstep(0, 1, c);
 }
+ 
+float smax(float a, float b, float k) {
+	float diff = a - b;
+	float h = saturate(0.5 + 0.5 * diff / k);
+	return b + h * (diff + k * (1.0f - h));
+}
 
 float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
@@ -648,13 +661,20 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float angle_offset = aperture_opening;
 
 	float signed_distance = 0.f;
+	for(int i = 0; i < 5; ++i) {
+		float angle = angle_offset + (i/float(5)) * PI * 2;
+		float2 axis = float2(cos(angle), sin(angle));
+		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
+	}
+
+	float aperture_fft = fade_aperture_edge(0.5, 0.015, signed_distance);
+
+	signed_distance = 0.f;
 	for(int i = 0; i < num_blades; ++i) {
 		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
 		float2 axis = float2(cos(angle), sin(angle));
-		signed_distance = max(signed_distance, dot(axis, ndc));
+		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
 	}
-
-	float aperture_fft = fade_aperture_edge(0.5, 0.2, signed_distance);
 	float aperture_mask = fade_aperture_edge(0.75, 0.05, signed_distance);
 
 	{ // Diffraction rings
@@ -673,7 +693,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_fft *= saturate(dust + 0.995);
+		aperture_fft *= saturate(dust + 0.75);
 		aperture_mask *= saturate(dust + 0.95);
 	}
 
