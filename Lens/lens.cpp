@@ -1768,6 +1768,7 @@ void DrawAperture() {
 
 	g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depth_buffer_view);
 
@@ -1818,8 +1819,13 @@ void DrawStarBurst() {
 void Render() {
 
 	UpdateGlobals();
-	DrawAperture();
-	DrawStarBurst();
+
+	static bool first = true;
+	if (first) {
+		DrawAperture();
+		DrawStarBurst();
+		first = false;
+	}
 
 	#if defined(DRAWLENSFLARE)
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);

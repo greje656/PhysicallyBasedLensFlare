@@ -554,8 +554,7 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 	result.pos.xy += c.xy * float2(0.5, 1);
 
 	result.uv.xy = (pos.xy + float2(1.f, 1.f)) * float2(0.5f, 0.5f);
-	result.uv.z = 1.f - saturate(light_dir.x * 10.f);
-	result.uv.z *= 1;
+	result.uv.z = 1.f - saturate(abs(light_dir.x * 10.f));
 	return result;
 }
 
