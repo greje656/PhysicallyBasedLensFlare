@@ -338,7 +338,7 @@ float GetArea(int2 pos) {
 	float Oa = unit_patch_length * unit_patch_length * no_area_contributors;
 	float Na = (A + B + C + D) / no_area_contributors;
 
-	float energy = 1.f;
+	float energy = 3.f;
 	float area = (Oa/(Na + 0.00001)) * energy;
 
 	return isnan(area) ? 0.f : area;
@@ -446,11 +446,16 @@ float4 PS(in PSInput input) : SV_Target {
 	sun_disk = smoothstep(0, 1, sun_disk);
 	sun_disk *= lerp(0.5, 1, saturate(lens_distance));
 
+	float aperture_disk = saturate(length(aperture_uv - 0.5) * 0.5);
+	aperture_disk = smoothstep(0, 1, aperture_disk);
+	aperture_disk = lerp(0.5, 1, aperture_disk);
+
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
 	float alpha3 = mask.w;
 	float alpha4 = aperture;
-	float alpha = alpha1 * alpha2 * alpha3 * alpha4;
+	float alpha5 = aperture_disk;
+	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
 
 	[branch]
 	if(alpha == 0.f)
@@ -548,7 +553,7 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 	float3 l0 = float3(0, 0, 0);
 	float3 c = intersectPlane(n, p0, l0, light_dir);
 
-	float intensity = 1.f - saturate(abs(light_dir.x * 10.f));
+	float intensity = 1.f - saturate(abs(light_dir.x * 12.f));
 
 	float oo1 = 1 - (sin(time * 20) + 1) * 0.025;
 	float oo2 = 1 - (sin(time *  5) + 1) * 0.0125;
@@ -586,7 +591,7 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 	int num_steps = 256;
 
 	// -ve violet, +v reds
-	float scale = -0.5f + nvalue * 0.1;
+	float scale = -0.65f + nvalue * 0.1;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
@@ -596,8 +601,8 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
 		float2 p = float2(r, i);
 
-		float v = pow(length(p), 1.5f) * 0.01;
-		float lambda = lerp(350.f, 650.f, n);
+		float v = pow(length(p), 2.f) * 0.0001;
+		float lambda = lerp(350.f, 600.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
 		rgb = lerp(rgb, rgb, n);
 		result += v * rgb;
@@ -665,26 +670,38 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = number_of_blades - 1.f;
+	int num_blades = number_of_blades;
+	int num_blades_fft = number_of_blades - 1.f;
 	float angle_offset = aperture_opening;
 
 	float opening = saturate(aperture_opening/10.f);
 
+	float a = (atan2(ndc.x, ndc.y) + angle_offset)/(2*PI) + 3.f/4.f;
+	float o = frac(a * num_blades + 0.5);
+	float w1 = lerp(0.010, 0.001f, saturate((num_blades - 4)/10.f));
+	float w2 = lerp(0.015, 0.001f, saturate((num_blades - 4)/10.f));
+	float s = sin(o * 2 * PI);
+	float s1 = s * w1;
+	float s2 = s * w2;
+
 	float signed_distance = 0.f;
-	for(int i = 0; i < num_blades; ++i) {
-		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
+	for(int i = 0; i < num_blades_fft; ++i) {
+		float angle = angle_offset + (i/float(num_blades_fft)) * PI * 2;
 		float2 axis = float2(cos(angle), sin(angle));
 		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
 	}
 
+	signed_distance += s1;
 	float aperture_fft = fade_aperture_edge(0.7, 0.02, signed_distance);
 
 	signed_distance = 0.f;
-	for(int i = 0; i < number_of_blades; ++i) {
-		float angle = angle_offset + (i/float(number_of_blades)) * PI * 2;
+	for(int i = 0; i < num_blades; ++i) {
+		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
 		float2 axis = float2(cos(angle), sin(angle));
-		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
+		signed_distance = smax(signed_distance, dot(axis, ndc), 0.001);
 	}
+
+	signed_distance += s2;
 	float aperture_mask = fade_aperture_edge(0.75, 0.05, signed_distance);
 
 	{ // Diffraction rings
@@ -704,7 +721,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
 		aperture_fft *= saturate(dust + lerp(0.95, 0.85, opening));
-		aperture_mask *= saturate(dust + 0.95);
+		aperture_mask *= saturate(dust + 0.9);
 	}
 
 	float3 rgb = float3(aperture_fft, aperture_mask, 0);

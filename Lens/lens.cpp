@@ -142,6 +142,7 @@ bool editing_no_blades = false;
 bool editing_spread = false;
 bool editing_coating_quality = false;
 bool overlay_wireframe = false;
+bool aperture_needs_updating = true;
 bool draw2d = true;
 
 const float d6  = 53.142f;
@@ -504,13 +505,13 @@ namespace Shaders {
 		D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
 		UINT numElements = ARRAYSIZE(layout);
 
-		hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_5_0", &blob);
+		hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_5_0", &blob);	
 		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout2d);
 		blob->Release();
 
 		hr = CompileShaderFromSource(pixel_shader_source, "PS", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);
+		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
@@ -1015,6 +1016,9 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			if (editing_coating_quality) {
 				coating_quality = 0.5f + ny;
 			}
+
+			if (editing_aperture || editing_no_blades)
+				aperture_needs_updating = true;
 		}
 
 		if( PeekMessage( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
@@ -1820,11 +1824,10 @@ void Render() {
 
 	UpdateGlobals();
 
-	static bool first = true;
-	if (first) {
+	if (aperture_needs_updating) {
 		DrawAperture();
 		DrawStarBurst();
-		first = false;
+		aperture_needs_updating = false;
 	}
 
 	#if defined(DRAWLENSFLARE)
@@ -2013,6 +2016,11 @@ void Render() {
 	#endif
 
 	// Visualize the aperture texture:
+	//g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	//g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+
+	// Visualize the starburst texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
 	// DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
