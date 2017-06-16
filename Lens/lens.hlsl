@@ -543,26 +543,34 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 
 	float ratio = backbuffer_size.x / backbuffer_size.y;
 
-	result.pos = float4(pos.xy * 0.5f, 0.f, 1.f);
-	result.pos.xy *= float2(1, ratio);
-
 	float3 n = float3(0, 0, -1);
 	float3 p0 = float3(0, 0, 20);
 	float3 l0 = float3(0, 0, 0);
 	float3 c = intersectPlane(n, p0, l0, light_dir);
-	float intensity = dot(normalize(light_dir), float3(0,0,-1));
+
+	float intensity = 1.f - saturate(abs(light_dir.x * 10.f));
+
+	float oo1 = 1 - (sin(time * 20) + 1) * 0.025;
+	float oo2 = 1 - (sin(time *  5) + 1) * 0.0125;
+	float oo = oo1 * oo2;
+	intensity *= oo;
+
+	float opening = saturate(aperture_opening/10.f);
+	intensity *= opening * 0.5;
+
+	result.pos = float4(pos.xy * (0.1  + opening), 0.f, 1.f);
 	result.pos.xy += c.xy * float2(0.5, 1);
 
-	result.uv.xy = (pos.xy + float2(1.f, 1.f)) * float2(0.5f, 0.5f);
-	result.uv.z = 1.f - saturate(abs(light_dir.x * 10.f));
+	result.uv.xy = (pos.xy * float2(1, 0.5) + float2(1.f, 1.f)) * 0.5;
+	result.uv.z = intensity;
 	return result;
 }
 
 float4 PSStarburst(StarbustInput input) : SV_Target {
 
 	float2 uv = input.uv.xy;
-	float intensity = input.uv.z;
-
+	float intensity_mask = (1.f - saturate(length(uv - 0.5) * 2)) * 5.f;
+	float intensity = (input.uv.z) * intensity_mask;
 	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
 	starburst *= TemperatureToColor(INCOMING_LIGHT_TEMP);
 
@@ -588,17 +596,14 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
 		float2 p = float2(r, i);
 
-		float v = pow(length(p), 2.f) * 0.0001;
-
-		float start_fade_to_color = n;//saturate(n-0.5)/0.5;
-		float lambda = lerp(350.f, 650.f, start_fade_to_color);
+		float v = pow(length(p), 1.5f) * 0.01;
+		float lambda = lerp(350.f, 650.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
-		rgb = lerp(rgb, rgb, start_fade_to_color);
+		rgb = lerp(rgb, rgb, n);
 		result += v * rgb;
 	}
 
 	result /= (float)num_steps;
-
 	return float4(result, 1);
 }
 
@@ -619,11 +624,11 @@ float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / starburst_resolution - 0.5;
 
 	float3 result = 0;
-	int num_steps = 4;
+	int num_steps = 256;
 	
 	for(int i = 0; i <= num_steps; ++i){
 		float n = (float)i/(float)num_steps;
-		float a = n * TWOPI * 5;
+		float a = n * TWOPI * 2;
 		float2 spiral = float2(cos(a), sin(a)) * n * 0.01;
 		float2 jittered_uv = uv + spiral;
 		float2 scaled_uv = jittered_uv;
@@ -660,21 +665,23 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float2 uv = pos.xy / aperture_resolution;
 	float2 ndc = ((uv - 0.5f) * 2.f);
 
-	int num_blades = number_of_blades;
+	int num_blades = number_of_blades - 1.f;
 	float angle_offset = aperture_opening;
 
+	float opening = saturate(aperture_opening/10.f);
+
 	float signed_distance = 0.f;
-	for(int i = 0; i < 5; ++i) {
-		float angle = angle_offset + (i/float(5)) * PI * 2;
+	for(int i = 0; i < num_blades; ++i) {
+		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
 		float2 axis = float2(cos(angle), sin(angle));
 		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
 	}
 
-	float aperture_fft = fade_aperture_edge(0.5, 0.015, signed_distance);
+	float aperture_fft = fade_aperture_edge(0.7, 0.02, signed_distance);
 
 	signed_distance = 0.f;
-	for(int i = 0; i < num_blades; ++i) {
-		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
+	for(int i = 0; i < number_of_blades; ++i) {
+		float angle = angle_offset + (i/float(number_of_blades)) * PI * 2;
 		float2 axis = float2(cos(angle), sin(angle));
 		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
 	}
@@ -696,7 +703,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_fft *= saturate(dust + 0.75);
+		aperture_fft *= saturate(dust + lerp(0.95, 0.85, opening));
 		aperture_mask *= saturate(dust + 0.95);
 	}
 

@@ -1070,8 +1070,8 @@ LensShapes::Rectangle CreateUnitRectangle() {
 
 	float l = -1.f;
 	float r =  1.f;
-	float b = -1.f;
-	float t =  1.f;
+	float b = -1.f / ratio;
+	float t =  1.f / ratio;
 
 	SimpleVertex vertices[] = {
 		XMFLOAT3(l, b, 0.f),
