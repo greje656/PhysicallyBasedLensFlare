@@ -130,7 +130,7 @@ std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
 float x_dir = 0.f;
 float y_dir = 0.f;
-float aperture_opening = 5.f;
+float aperture_opening = 7.f;
 float number_of_blades = 5.f;
 vec3 direction(0.f, 0.f, -1.f);
 
@@ -219,7 +219,7 @@ float backbuffer_width = 1800;
 float backbuffer_height = 900;
 float aperture_resolution = 512;
 float starburst_resolution = 2056;
-float coating_quality = 0.0;
+float coating_quality = 1.25;
 float ratio = backbuffer_height / backbuffer_width;
 float min_ior = 1000.f;
 float max_ior = -1000.f;
@@ -227,7 +227,7 @@ float global_scale = 0.009;
 float total_lens_distance = 0.f;
 float time = (float)ghost_bounce_1;
 float speed = 0.1f;
-float rays_spread = 2.0f;
+float rays_spread = 0.75f;
 
 #ifdef SAVE_BACK_BUFFER_TO_DISK
 #include <DirectXTex.h>
