@@ -437,7 +437,7 @@ float4 PS(in PSInput input) : SV_Target {
 	float4 color = input.color;
 	float4 mask = input.mask;
 
-	float2 aperture_uv = (color.xy + 1.f)/2.f;
+	float2 aperture_uv = (mask.xy + 1.f)/2.f;
 	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).g;
 	
 	float fade = 0.2;
