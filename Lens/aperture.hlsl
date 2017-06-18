@@ -21,7 +21,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	int num_of_blades = int(number_of_blades);
 
-	float a = (atan2(ndc.x, ndc.y) + aperture_opening)/(2*PI) + 3.f/4.f;
+	float a = (atan2(ndc.x, ndc.y) + aperture_opening)/TWOPI + 3.f/4.f;
 	float o = frac(a * num_of_blades + 0.5);
 	float w1 = lerp(0.010, 0.001f, saturate((num_of_blades - 4)/10.f));
 	float w2 = lerp(0.025, 0.001f, saturate((num_of_blades - 4)/10.f));
