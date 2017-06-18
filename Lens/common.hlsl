@@ -1,12 +1,7 @@
 #define PI 3.14159265359f
 #define TWOPI PI * 2.f
-#define INCOMING_LIGHT_TEMP 6000.f
-
 #define NANO_METER 0.0000001
-#define NUM_THREADS 32
-
-#define AP_IDX 14
-#define PATCH_TESSELATION 32
+#define INCOMING_LIGHT_TEMP 6000.f
 
 SamplerState LinearSampler {
     Filter = MIN_MAG_MIP_LINEAR;

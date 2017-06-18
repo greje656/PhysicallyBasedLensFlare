@@ -16,43 +16,6 @@
 
 using namespace DirectX;
 
-//--------------------------------------------------------------------------------------
-// DEFAULT
-//--------------------------------------------------------------------------------------
-const std::string vertex_shader_source = R"(
-cbuffer Uniforms : register(b0) {
-	float4 color;
-	float4 placement;
-};
-
-//--------------------------------------------------------------------------------------
-// Vertex Shader
-//--------------------------------------------------------------------------------------
-float4 VS( float4 Pos : POSITION ) : SV_POSITION {
-	float4 p = Pos;
-	if (placement.y == 1.f) {
-		p.xy *= placement.zw;
-		p.x += placement.z;
-		p.x += placement.x;
-	}
-	return p;
-}
-)";
-
-const std::string pixel_shader_source = R"(
-cbuffer Uniforms : register(b0) {
-	float4 color;
-	float4 placement;
-};
-
-//--------------------------------------------------------------------------------------
-// Pixel Shader
-//--------------------------------------------------------------------------------------
-float4 PS( float4 Pos : SV_POSITION ) : SV_Target {
-    return color;
-}
-)";
-
 struct PatentFormat {
 	float r;
 	float d;
@@ -234,7 +197,7 @@ float rays_spread = 0.75f;
 void SaveBackBuffer() {
 	ScratchImage scratch_image;
 	ID3D11Resource* resource = nullptr;
-	Views::renderTargetView->GetResource(&resource);
+	Textures::backbuffer_rt_view->GetResource(&resource);
 	CaptureTexture(g_pd3dDevice, g_pImmediateContext, resource, scratch_image);
 
 	static int frame_number = 0;
@@ -320,39 +283,37 @@ IDXGISwapChain1*           g_pSwapChain1 = nullptr;
 ID3D11InputLayout*         g_pVertexLayout2d = nullptr;
 ID3D11InputLayout*         g_pVertexLayout3d = nullptr;
 
-namespace Views {
+namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 	ID3D11ShaderResourceView*  null_sr_view[1] = { NULL };
-	ID3D11UnorderedAccessView* lensInterfaceResourceView;
-	ID3D11ShaderResourceView*  shaderHDRView = nullptr;
-	ID3D11DepthStencilView*    depthStencilView = nullptr;
-	ID3D11RenderTargetView*    renderTargetView = nullptr;
-	ID3D11RenderTargetView*    HDRView = nullptr;
-}
+	ID3D11UnorderedAccessView* lensInterface_view;
+	ID3D11DepthStencilView*    depthstencil_view = nullptr;
+	ID3D11RenderTargetView*    backbuffer_rt_view = nullptr;
 
-namespace Textures {
-	ID3D11Texture2D*          depthStencil = nullptr;
-	ID3D11Texture2D*          HDRTexture = nullptr;
-	ID3D11Texture2D*          dust = nullptr;
-	ID3D11Texture2D*          aperture = nullptr;
-	ID3D11Texture2D*          starburst = nullptr;
-	ID3D11Texture2D*          starburst_filtered = nullptr;
-	ID3D11Texture2D*          aperture_depth_buffer = nullptr;
+	ID3D11Texture2D*           hdr = nullptr;
+	ID3D11Texture2D*           dust = nullptr;
+	ID3D11Texture2D*           aperture = nullptr;
+	ID3D11Texture2D*           starburst = nullptr;
+	ID3D11Texture2D*           starburst_filtered = nullptr;
+	ID3D11Texture2D*           aperture_depthbuffer = nullptr;
+	ID3D11Texture2D*           depthbuffer = nullptr;
 
-	ID3D11RenderTargetView*   dust_rt_view = nullptr;
-	ID3D11ShaderResourceView* dust_sr_view = nullptr;
-	ID3D11RenderTargetView*   aperture_rt_view = nullptr;
-	ID3D11ShaderResourceView* aperture_sr_view = nullptr;
-	ID3D11DepthStencilView*   aperture_depth_buffer_view = nullptr;
+	ID3D11RenderTargetView*    dust_rt_view = nullptr;
+	ID3D11ShaderResourceView*  dust_sr_view = nullptr;
+	ID3D11RenderTargetView*    aperture_rt_view = nullptr;
+	ID3D11ShaderResourceView*  aperture_sr_view = nullptr;
+	ID3D11RenderTargetView*    hdr_rt_view = nullptr;
+	ID3D11ShaderResourceView*  hdr_sr_view = nullptr;
+	ID3D11DepthStencilView*    aperture_depthbuffer_view = nullptr;
 
-	ID3D11RenderTargetView*   starburst_rt_view = nullptr;
-	ID3D11ShaderResourceView* starburst_sr_view = nullptr;
-	ID3D11RenderTargetView*   starburst_filtered_rt_view = nullptr;
-	ID3D11ShaderResourceView* starburst_filtered_sr_view = nullptr;
-	ID3D11DepthStencilView*   starburst_depth_buffer_view = nullptr;
+	ID3D11RenderTargetView*    starburst_rt_view = nullptr;
+	ID3D11ShaderResourceView*  starburst_sr_view = nullptr;
+	ID3D11RenderTargetView*    starburst_filtered_rt_view = nullptr;
+	ID3D11ShaderResourceView*  starburst_filtered_sr_view = nullptr;
+	ID3D11DepthStencilView*    starburst_depth_buffer_view = nullptr;
 
-	ID3D11SamplerState*       linear_clamp_sampler = nullptr;
-	ID3D11SamplerState*       linear_wrap_sampler = nullptr;
+	ID3D11SamplerState*        linear_clamp_sampler = nullptr;
+	ID3D11SamplerState*        linear_wrap_sampler = nullptr;
 
 	void InitializeSamplers() {
 		D3D11_SAMPLER_DESC desc;
@@ -438,15 +399,15 @@ namespace Textures {
 	void InitTextures() {
 		ID3D11Texture2D* backBuffer = nullptr;
 		g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
-		g_pd3dDevice->CreateRenderTargetView(backBuffer, nullptr, &Views::renderTargetView);
+		g_pd3dDevice->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
 
-		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::HDRTexture, Views::shaderHDRView, Views::HDRView);
+		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
 		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
 		Textures::initTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
 		Textures::initTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
-		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthStencil, Views::depthStencilView);
-		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depth_buffer, Textures::aperture_depth_buffer_view);
-		Textures::InitializeDepthBuffer((int)starburst_resolution, (int)starburst_resolution, Textures::aperture_depth_buffer, Textures::starburst_depth_buffer_view);
+		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthbuffer, Textures::depthstencil_view);
+		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
+		Textures::InitializeDepthBuffer((int)starburst_resolution, (int)starburst_resolution, Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
 
 		HBITMAP bitmap = LoadBitmap(g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
 		int size = 512 * 512 * 4;
@@ -505,35 +466,43 @@ namespace Shaders {
 		D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
 		UINT numElements = ARRAYSIZE(layout);
 
-		hr = CompileShaderFromSource(vertex_shader_source, "VS", "vs_5_0", &blob);	
+		hr = CompileShaderFromFile(L"visualization.hlsl", "VS", "vs_5_0", &blob);
 		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout2d);
 		blob->Release();
 
-		hr = CompileShaderFromSource(pixel_shader_source, "PS", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"visualization.hlsl", "PS", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob);
+		std::string aperture_id_string = std::to_string(aperture_id);
+		std::string num_threads_string = std::to_string(num_threads);
+		std::string patch_tesselation_string = std::to_string(patch_tesselation);
+
+		D3D_SHADER_MACRO lens_defines[] = {
+			"AP_IDX", aperture_id_string.c_str(),
+			"NUM_THREADS", num_threads_string.c_str(),
+			"PATCH_TESSELATION", patch_tesselation_string.c_str(), 0, 0 };
+		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob, lens_defines);
 		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
 		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
 		blob->Release();
-
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob);
+		
+		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, lens_defines);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();	
 
-		D3D_SHADER_MACRO debug_flags[] = { "DEBUG_VALUES", "", 0, 0 };
+		D3D_SHADER_MACRO debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_VALUES", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
 		blob->Release();
 
-		D3D_SHADER_MACRO wireframe_debug_flags[] = { "DEBUG_WIREFRAME", "", 0, 0 };
+		D3D_SHADER_MACRO wireframe_debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_WIREFRAME", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob);
+		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob, lens_defines);
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
 		blob->Release();
 
@@ -732,11 +701,11 @@ namespace States {
 	ID3D11RasterizerState*   rasterStateCull = nullptr;
 	ID3D11RasterizerState*   rasterStateNoCull = nullptr;
 	ID3D11RasterizerState*   rasterStateNoCullWireframe = nullptr;
-	ID3D11DepthStencilState* depthStencilState = nullptr;
-	ID3D11DepthStencilState* depthStencilStateFill = nullptr;
-	ID3D11DepthStencilState* depthStencilStateGreaterOrEqualIncr = nullptr;
-	ID3D11DepthStencilState* depthStencilStateGreaterOrEqualDecr = nullptr;
-	ID3D11DepthStencilState* depthStencilStateGreaterOrEqualRead = nullptr;
+	ID3D11DepthStencilState* depthbufferState = nullptr;
+	ID3D11DepthStencilState* depthbufferStateFill = nullptr;
+	ID3D11DepthStencilState* depthbufferStateGreaterOrEqualIncr = nullptr;
+	ID3D11DepthStencilState* depthbufferStateGreaterOrEqualDecr = nullptr;
+	ID3D11DepthStencilState* depthbufferStateGreaterOrEqualRead = nullptr;
 
 	void InitStates() {
 		D3D11_RASTERIZER_DESC rasterState;
@@ -837,11 +806,11 @@ namespace States {
 		DepthStencilStateGreaterOrEqualRead.FrontFace.StencilFunc = D3D11_COMPARISON_LESS_EQUAL;
 		DepthStencilStateGreaterOrEqualRead.BackFace = DepthStencilStateGreaterOrEqualRead.FrontFace;
 
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilState, &States::depthStencilState);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateFill, &States::depthStencilStateFill);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualIncr, &States::depthStencilStateGreaterOrEqualIncr);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualDecr, &States::depthStencilStateGreaterOrEqualDecr);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualRead, &States::depthStencilStateGreaterOrEqualRead);
+		g_pd3dDevice->CreateDepthStencilState(&DepthStencilState, &States::depthbufferState);
+		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateFill, &States::depthbufferStateFill);
+		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualIncr, &States::depthbufferStateGreaterOrEqualIncr);
+		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualDecr, &States::depthbufferStateGreaterOrEqualDecr);
+		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualRead, &States::depthbufferStateGreaterOrEqualRead);
 	}
 }
 
@@ -902,7 +871,7 @@ void ParseLensComponents() {
 	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
 	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
 
-	hr = g_pd3dDevice->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Views::lensInterfaceResourceView);
+	hr = g_pd3dDevice->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Textures::lensInterface_view);
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -976,11 +945,6 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 		if (msg.message == WM_LBUTTONDOWN) {
 			left_mouse_down = true;
-			//stringstream mouse_msg;
-			//mouse_msg << y_to_print << "\n";
-			//WCHAR str[16]; 
-			//MultiByteToWideChar(0, 0, mouse_msg.str().c_str() + 1, mouse_msg.str().length(), str, 16);
-			//OutputDebugString(str);
 		}
 
 		if (msg.message == WM_LBUTTONUP) {
@@ -1127,6 +1091,7 @@ LensShapes::Circle CreateUnitCircle() {
 	std::vector<SimpleVertex> triangle_vertices;
 	std::vector<SimpleVertex> line_vertices;
 
+	triangle_vertices.resize(num_points_per_cirlces * 3);
 	for (int i = 0; i < num_points_per_cirlces - 1; i++) {
 
 		float t1 = (float)i / (float)(num_points_per_cirlces - 1);
@@ -1146,9 +1111,9 @@ LensShapes::Circle CreateUnitCircle() {
 		to_add2.pos = XMFLOAT3(x2, y2, 0.f);
 		to_add3.pos = XMFLOAT3(0.f, 0.f, 0.f);
 
-		triangle_vertices.push_back(to_add1);
-		triangle_vertices.push_back(to_add2);
-		triangle_vertices.push_back(to_add3);
+		triangle_vertices[i * 3 + 0] = to_add1;
+		triangle_vertices[i * 3 + 1] = to_add2;
+		triangle_vertices[i * 3 + 2] = to_add3;
 
 		line_vertices.push_back(to_add1);
 	}
@@ -1191,37 +1156,42 @@ LensShapes::Circle CreateUnitCircle() {
 LensShapes::Patch CreateUnitPatch(int subdiv) {
 
 	float l = -1.0f;
-	float r = 1.0f;
+	float r =  1.0f;
 	float b = -1.0f;
-	float t = 1.0f;
+	float t =  1.0f;
 
 	std::vector<SimpleVertex> vertices;
+	std::vector<int> indices;
+
+	vertices.resize(subdiv * subdiv);
 	for (int y = 0; y < subdiv; ++y) {
 		float ny = (float)y / (float)(subdiv - 1);
 		for (int x = 0; x < subdiv; ++x) {
 			float nx = (float)x / (float)(subdiv - 1);
 			float x_pos = lerp(l, r, nx);
 			float y_pos = lerp(t, b, ny);
-			vertices.push_back({ XMFLOAT3(x_pos, y_pos, 0.f) });
+			vertices[y*subdiv + x] = { XMFLOAT3(x_pos, y_pos, 0.f) };
 		}
 	}
 
-	std::vector<int> indices;
 	int current_corner = 0;
+	indices.resize((subdiv - 1) * (subdiv - 1) * 6);
 	for (int y = 0; y < (subdiv - 1); ++y) {
 		for (int x = 0; x < (subdiv - 1); ++x) {
+			int i = (y * (subdiv - 1) + x) * 6;
+			
 			int i1 = current_corner;
 			int i2 = i1 + 1;
 			int i3 = i1 + subdiv;
 			int i4 = i2 + subdiv;
 
-			indices.push_back(i3);
-			indices.push_back(i1);
-			indices.push_back(i2);
+			indices[i + 0] = i3;
+			indices[i + 1] = i1;
+			indices[i + 2] = i2;
 
-			indices.push_back(i2);
-			indices.push_back(i4);
-			indices.push_back(i3);
+			indices[i + 3] = i2;
+			indices[i + 4] = i4;
+			indices[i + 5] = i3;
 			
 			current_corner++;
 		}
@@ -1468,7 +1438,7 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rec
 	context->RSSetState(States::rasterStateCull);
 
 	context->OMSetBlendState(States::blendStateNoBlend, blendFactor, sampleMask);
-	context->OMSetDepthStencilState(States::depthStencilState, 0);
+	context->OMSetDepthStencilState(States::depthbufferState, 0);
 	context->OMSetRenderTargets(1, &rt_view, depth_buffer_view);
 	context->ClearRenderTargetView(rt_view, XMVECTORF32{ 0, 0, 0, 0 });
 	context->ClearDepthStencilView(depth_buffer_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
@@ -1480,7 +1450,7 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rec
 
 	context->Draw(6, 0);
 
-	g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
+	g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
 }
 
@@ -1507,13 +1477,13 @@ void DrawFlat(LensInterface& right) {
 	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w };
 
 	g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-	g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement1, true);
 
-	g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 0);
+	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 0);
 	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement2, true);
 
-	g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 1);
+	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
 	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement3, true);
 	DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement3, false);
@@ -1573,27 +1543,27 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float lr = _left.radius * global_scale;
 		XMFLOAT4 left_placement = { lx, 1.f, lr, lr };
 
-		g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualIncr, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
 		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualDecr, 2);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualDecr, 2);
 		DrawCircle(g_pImmediateContext, unit_circle, fill_color, left_placement, true);
 
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 2);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 2);
 		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
 
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
@@ -1620,26 +1590,26 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float rr = right.radius * global_scale;
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
-		g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualIncr, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualIncr, 2);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 2);
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 3);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 3);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
 
-		g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
@@ -1666,26 +1636,26 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float rr = right.radius * global_scale;
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
-		g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 0);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 0);
 		DrawCircle(g_pImmediateContext, unit_circle, fill_color, left_placement, true);
 		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
 
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
 		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
 		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateFill, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
 		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
 		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
 
 		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilStateGreaterOrEqualRead, 1);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
 		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
 	}
@@ -1693,8 +1663,8 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 
 void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
 
-	g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_STENCIL, 1.0f, 0);
-	g_pImmediateContext->OMSetDepthStencilState(States::depthStencilState, 0);
+	g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
 	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 
 	int i = 0;
@@ -1730,7 +1700,7 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->UpdateSubresource(buffer, 0, nullptr, ptr, 0, 0);
 	context->UpdateSubresource(Buffers::instanceUniforms, 0, nullptr, &cb, 0, 0);
 	
-	g_pImmediateContext->OMSetDepthStencilState(States::depthStencilState, 0);
+	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
 	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
@@ -1774,9 +1744,9 @@ void DrawAperture() {
 	g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depth_buffer_view);
+	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depthbuffer_view);
 
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
 }
 
 void DrawStarBurst() {
@@ -1803,14 +1773,14 @@ void DrawStarBurst() {
 	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	g_pImmediateContext->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
 	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
 	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
 	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	vp.Width = (FLOAT)backbuffer_width;
 	vp.Height = (FLOAT)backbuffer_height;
@@ -1834,11 +1804,11 @@ void Render() {
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
 
 		g_pImmediateContext->RSSetState(States::rasterStateNoCull);
-		g_pImmediateContext->OMSetRenderTargets(1, &Views::HDRView, Views::depthStencilView);
-		g_pImmediateContext->ClearRenderTargetView(Views::HDRView, XMVECTORF32{ 0, 0, 0, 0 });
-		g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+		g_pImmediateContext->OMSetRenderTargets(1, &Textures::hdr_rt_view, Textures::depthstencil_view);
+		g_pImmediateContext->ClearRenderTargetView(Textures::hdr_rt_view, XMVECTORF32{ 0, 0, 0, 0 });
+		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthStencilState, 0);
+		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
 		g_pImmediateContext->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
 
 		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
@@ -1872,14 +1842,14 @@ void Render() {
 			g_pImmediateContext->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
 
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Views::null_ua_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
 			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
-			g_pImmediateContext->VSSetShaderResources(0, 1, Views::null_sr_view);
+			g_pImmediateContext->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
 			bounce1++;
 		}
@@ -1907,18 +1877,18 @@ void Render() {
 
 		g_pImmediateContext->RSSetState(States::rasterStateCull);
 		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
-		g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
-		g_pImmediateContext->ClearRenderTargetView(Views::renderTargetView, XMVECTORF32{ 0,0,0,0});
+		g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+		g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ 0,0,0,0});
 
 		g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
 		g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 		g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 		g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-		g_pImmediateContext->PSSetShaderResources(1, 1, &Views::shaderHDRView);
+		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::hdr_sr_view);
 
-		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
-		g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+		g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	#else
 		if(!draw2d) {
@@ -1929,17 +1899,17 @@ void Render() {
 			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
-			g_pImmediateContext->OMSetDepthStencilState(States::depthStencilState, 0);
+			g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+			g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
 			g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-			g_pImmediateContext->ClearRenderTargetView(Views::renderTargetView, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
-			g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+			g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
+			g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 			g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 			g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
 			g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
 			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Views::lensInterfaceResourceView, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 
 			g_pImmediateContext->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
@@ -1950,7 +1920,7 @@ void Render() {
 			g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 			// Dispatch
 			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Views::null_ua_view, nullptr);
+			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 
 			// Draw
 			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
@@ -1963,15 +1933,15 @@ void Render() {
 				g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			}
 
-			g_pImmediateContext->VSSetShaderResources(0, 1, Views::null_sr_view);
-			g_pImmediateContext->PSSetShaderResources(1, 1, Views::null_sr_view);
+			g_pImmediateContext->VSSetShaderResources(0, 1, Textures::null_sr_view);
+			g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
 		} else {
 			g_pImmediateContext->RSSetState(States::rasterStateCull);
 			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
 
-			g_pImmediateContext->OMSetRenderTargets(1, &Views::renderTargetView, Views::depthStencilView);
-			g_pImmediateContext->ClearRenderTargetView(Views::renderTargetView, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
-			g_pImmediateContext->ClearDepthStencilView(Views::depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+			g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+			g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
+			g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 			g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
 			g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
@@ -2018,12 +1988,12 @@ void Render() {
 	// Visualize the aperture texture:
 	//g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	//g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
 	// Visualize the starburst texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
-	// DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Views::renderTargetView, Views::depthStencilView);
+	// DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 		
 	// Visualize the dust texture:
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
