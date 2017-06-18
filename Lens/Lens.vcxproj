@@ -350,6 +350,7 @@
     <ClCompile Include="lens.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="fft.h" />
     <ClInclude Include="ray_trace.h" />
     <CLInclude Include="resource.h" />
     <ResourceCompile Include="Lens.rc" />
