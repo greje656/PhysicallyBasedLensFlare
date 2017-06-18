@@ -1,5 +1,5 @@
 #define PI 3.14159265359f
-#define TWOPI PI * 2.f
+#define TWOPI 6.28318530718f
 #define NANO_METER 0.0000001
 #define INCOMING_LIGHT_TEMP 6000.f
 
