@@ -27,8 +27,7 @@ RWTexture2D<float3> TextureTargetI  : register(u1);
 
 static const float PI = 3.14159265f;
 
-void GetButterflyValues(uint passIndex, uint x, out uint2 indices, out float2 weights)
-{
+void GetButterflyValues(uint passIndex, uint x, out uint2 indices, out float2 weights) {
 	int sectionWidth = 2 << passIndex;
 	int halfSectionWidth = sectionWidth / 2;
 
@@ -48,8 +47,7 @@ void GetButterflyValues(uint passIndex, uint x, out uint2 indices, out float2 we
 }
 
 groupshared float3 pingPongArray[4][LENGTH];
-void ButterflyPass(int passIndex, uint x, uint t0, uint t1, out float3 resultR, out float3 resultI)
-{
+void ButterflyPass(int passIndex, uint x, uint t0, uint t1, out float3 resultR, out float3 resultI) {
 	uint2 Indices;
 	float2 Weights;
 	GetButterflyValues(passIndex, x, Indices, Weights);
@@ -65,28 +63,24 @@ void ButterflyPass(int passIndex, uint x, uint t0, uint t1, out float3 resultR, 
 }
 
 [numthreads( LENGTH, 1, 1 )]
-void ButterflySLM(uint3 position : SV_DispatchThreadID)
-{
-#ifdef ROWPASS
-	uint2 texturePos = uint2( position.xy );
-#else
-	uint2 texturePos = uint2( position.yx );
-#endif
+void ButterflySLM(uint3 position : SV_DispatchThreadID) {
+	#ifdef ROWPASS
+		uint2 texturePos = uint2( position.xy );
+	#else
+		uint2 texturePos = uint2( position.yx );
+	#endif
 
-	// Load entire row or column into scratch array
-	pingPongArray[0][position.x].xyz = TextureSourceR[texturePos];
-#if defined(ROWPASS)
-	// don't load values from the imaginary texture when loading the original texture
-	pingPongArray[1][position.x].xyz = 0;
-#else
-	pingPongArray[1][position.x].xyz = TextureSourceI[texturePos];
-#endif
+		// Load entire row or column into scratch array
+		pingPongArray[0][position.x].xyz = TextureSourceR[texturePos];
+	#if defined(ROWPASS)
+		// don't load values from the imaginary texture when loading the original texture
+		pingPongArray[1][position.x].xyz = 0;
+	#else
+		pingPongArray[1][position.x].xyz = TextureSourceI[texturePos];
+	#endif
 	
 	uint4 textureIndices = uint4(0, 1, 2, 3);
-
-	
-	for (int i = 0; i < BUTTERFLY_COUNT-1; i++)
-	{
+	for (int i = 0; i < BUTTERFLY_COUNT-1; i++) {
 		GroupMemoryBarrierWithGroupSync();
 		ButterflyPass( i, position.x, textureIndices.x, textureIndices.y, pingPongArray[textureIndices.z][position.x].xyz, pingPongArray[textureIndices.w][position.x].xyz );
 		textureIndices.xyzw = textureIndices.zwxy;
