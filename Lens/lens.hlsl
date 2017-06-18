@@ -1,29 +1,10 @@
-#define PI 3.14159265359f
-#define TWOPI PI * 2.f
-#define INCOMING_LIGHT_TEMP 6000.f
-
-#define NANO_METER 0.0000001
-#define NUM_THREADS 32
-
-#define AP_IDX 14
-#define PATCH_TESSELATION 32
-
-SamplerState LinearSampler {
-    Filter = MIN_MAG_MIP_LINEAR;
-    AddressU = Wrap;
-    AddressV = Wrap;
-};
+#include "common.hlsl"
 
 struct PSInput {
 	float4 pos : SV_POSITION;
 	float4 color : TEXCOORD0;
 	float4 mask : TEXCOORD1;
 	float4 reflectance : TEXCOORD2;
-};
-
-struct StarbustInput {
-	float4 pos : SV_POSITION;
-	float3 uv : TEXCOORD0;
 };
 
 struct Intersection {
@@ -51,65 +32,14 @@ struct Ray {
 	float4 tex;
 };
 
-// Constant buffers
-cbuffer GlobalData : register(b1) {
-	float time;
-	float spread;
-	float plate_size;
-	float aperture_id;
-
-	float num_interfaces;
-	float coating_quality;
-	float2 backbuffer_size;
-
-	float3 light_dir;
-	float aperture_resolution;
-
-	float aperture_opening;
-	float number_of_blades;
-	float starburst_resolution;
-	float padding;
-};
-
 cbuffer GhostData : register(b2) {
 	float bounce1;
 	float bounce2;
 };
 
-// Bounded buffers
-Texture2D input_texture1 : register(t1);
-Texture2D input_texture2 : register(t2);
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
 RWStructuredBuffer<LensInterface> lens_interface : register(u1);
-
-static float4 temperature_color_map[25] = {
-	float4(    0.0, 0.000, 0.000, 0.000),
-	float4( 1000.0, 1.000, 0.007, 0.000),
-	float4( 1500.0, 1.000, 0.126, 0.000),
-	float4( 2000.0, 1.000, 0.234, 0.010),
-	float4( 2500.0, 1.000, 0.349, 0.067),
-	float4( 3000.0, 1.000, 0.454, 0.151),
-	float4( 3500.0, 1.000, 0.549, 0.254),
-	float4( 4000.0, 1.000, 0.635, 0.370),
-	float4( 4500.0, 1.000, 0.710, 0.493),
-	float4( 5000.0, 1.000, 0.778, 0.620),
-	float4( 5500.0, 1.000, 0.837, 0.746),
-	float4( 6000.0, 1.000, 0.890, 0.869),
-	float4( 6500.0, 1.000, 0.937, 0.988),
-	float4( 7000.0, 0.907, 0.888, 1.000),
-	float4( 7500.0, 0.827, 0.839, 1.000),
-	float4( 8000.0, 0.762, 0.800, 1.000),
-	float4( 8500.0, 0.711, 0.766, 1.000),
-	float4( 9000.0, 0.668, 0.738, 1.000),
-	float4( 9500.0, 0.632, 0.714, 1.000),
-	float4(10000.0, 0.602, 0.693, 1.000),
-	float4(12000.0, 0.518, 0.632, 1.000),
-	float4(14000.0, 0.468, 0.593, 1.000),
-	float4(16000.0, 0.435, 0.567, 1.000),
-	float4(18000.0, 0.411, 0.547, 1.000),
-	float4(20000.0, 0.394, 0.533, 1.000)
-};
 
 Intersection TestFlat(Ray r, LensInterface F) {
 	Intersection i;
@@ -191,7 +121,6 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 
 
 Ray Trace(Ray r, float lambda, int2 bounce_pair) {
-
 	int LEN = bounce_pair.x + (bounce_pair.x - bounce_pair.y) + (num_interfaces - bounce_pair.y) - 1;
 	int PHASE = 0;
 	int DELTA = 1;
@@ -411,25 +340,6 @@ PSInput VS(uint id : SV_VertexID) {
 	return vertex;
 }
 
-float3 TemperatureToColor(float t) {
-	int index;
-	for(int i=0; i < 25; ++i){
-		if(t < temperature_color_map[i].x) {
-			index = i;
-			break;
-		}
-	}
-
-	if(index > 0) {
-		float4 lower = temperature_color_map[index - 1];
-		float4 upper = temperature_color_map[index];
-		float l = (t - lower.x)/(upper.x - lower.x);
-		return lerp(lower.yzw, upper.yzw, l);
-	} else {
-		return 0;
-	}
-}
-
 // Pixel Shader
 // ----------------------------------------------------------------------------------
 float4 PS(in PSInput input) : SV_Target {
@@ -448,7 +358,7 @@ float4 PS(in PSInput input) : SV_Target {
 
 	float aperture_disk = saturate(length(aperture_uv - 0.5) * 0.5);
 	aperture_disk = smoothstep(0, 1, aperture_disk);
-	aperture_disk = lerp(0.1, 1, aperture_disk);
+	aperture_disk = lerp(0.5, 1, aperture_disk);
 
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
@@ -472,259 +382,4 @@ float4 PS(in PSInput input) : SV_Target {
 	float3 v = alpha * input.reflectance.xyz * TemperatureToColor(INCOMING_LIGHT_TEMP);
 	
 	return float4(v, 1.f);
-}
-
-float3 ACESFilm(float3 x) {
-	float a = 2.51f;
-	float b = 0.03f;
-	float c = 2.43f;
-	float d = 0.59f;
-	float e = 0.14f;
-	return saturate((x*(a*x+b))/(x*(c*x+d)+e));
-}
-
-float4 PSToneMapping(float4 pos : SV_POSITION ) : SV_Target {
-	float3 c = input_texture1.Load(int3(pos.xy,0)).rgb;
-	c = ACESFilm(c);
-	return float4(c, 1);
-}
-
-float3 wl2rgbTannenbaum(float w){
-	float3 r;
-
-	if(w < 350.0)
-		r = float3(0.5, 0.0, 1.0);
-	else if((w >= 350.0) && (w < 440.0))
-		r = float3((440.0 - w) / 90.0, 0.0, 1.0);
-	else if((w >= 440.0) && (w <= 490.0))
-		r = float3(0.0, (w - 440.0) / 50.0, 1.0);
-	else if((w >= 490.0) && (w < 510.0))
-		r = float3(0.0, 1.0, (-(w - 510.0)) / 20.0);
-	else if ((w >= 510.0) && (w < 580.0))
-		r = float3((w - 510.0) / 70.0, 1.0, 0.0);
-	else if((w >= 580.0) && (w < 645.0))
-		r = float3(1.0, (-(w - 645.0)) / 65.0, 0.0);
-	else
-		r = float3(1.0, 0.0, 0.0);
-	
-	if(w < 350.0)
-		r *= 0.3;
-	else if((w >= 350.0) && (w < 420.0))
-		r *= 0.3 + (0.7 * ((w - 350.0) / 70.0));
-	else if((w >= 420.0) && (w <= 700.0))
-		r *= 1.0;
-	else if((w > 700.0) && (w <= 780.0))
-		r *= 0.3 + (0.7 * ((780.0 - w) / 80.0));
-	else
-		r *= 0.3;
-
-	return r;
-}
-
-float nrand( float2 n ) {
-	return frac(sin(dot(n.xy, float2(12.9898, 78.233)))* 43758.5453);
-}
-
-float n1rand( float2 n ) {
-	float t = frac(0);
-	float nrnd0 = nrand(n + 0.07f * t);
-	return nrnd0;
-}
-
-float3 intersectPlane(float3 n, float3 p0, float3 l0, float3 l) { 
-    // assuming vectors are all normalized
-    float denom = dot(n, l); 
-    if (denom > 1e-6) { 
-        float3 p0l0 = p0 - l0; 
-        float t = dot(p0l0, n) / denom; 
-        return p0 + l * t;
-    } 
- 
-    return 0; 
-} 
-
-StarbustInput VSStarburst(float4 pos : POSITION ) {
-	StarbustInput result;
-
-	float ratio = backbuffer_size.x / backbuffer_size.y;
-
-	float3 n = float3(0, 0, -1);
-	float3 p0 = float3(0, 0, 20);
-	float3 l0 = float3(0, 0, 0);
-	float3 c = intersectPlane(n, p0, l0, light_dir);
-
-	float intensity = 1.f - saturate(abs(light_dir.x * 12.f));
-
-	float oo1 = 1 - (sin(time * 5) + 1) * 0.025;
-	float oo2 = 1 - (sin(time * 1) + 1) * 0.0125;
-	float oo = oo1 * oo2;
-	intensity *= oo;
-
-	float opening = saturate(aperture_opening/10.f);
-	intensity *= opening * 0.5;
-
-	result.pos = float4(pos.xy * (0.1  + opening), 0.f, 1.f);
-	result.pos.xy += c.xy * float2(0.5, 1);
-
-	result.uv.xy = (pos.xy * float2(1, 0.5) + float2(1.f, 1.f)) * 0.5;
-	result.uv.z = intensity;
-	return result;
-}
-
-float4 PSStarburst(StarbustInput input) : SV_Target {
-
-	float2 uv = input.uv.xy;
-	float intensity_mask = (1.f - saturate(length(uv - 0.5) * 2)) * 5.f;
-	float intensity = (input.uv.z) * intensity_mask;
-	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
-	starburst *= TemperatureToColor(INCOMING_LIGHT_TEMP);
-
-	return float4(starburst, 1.f);
-}
-
-float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
-
-	float2 uv = pos.xy / starburst_resolution - 0.5;
-	float nvalue = n1rand(uv);
-
-	float3 result = 0;
-	int num_steps = 256;
-
-	// -ve violet, +v reds
-	float scale = -0.65f + nvalue * 0.1;
-	for(int i = 0; i <= num_steps; ++i) {
-		float n = (float)i/(float)num_steps;
-		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
-		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
-
-		float r = input_texture1.Sample(LinearSampler, scaled_uv).r * !clamped;
-		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
-		float2 p = float2(r, i);
-
-		float v = pow(length(p), 2.f) * 0.00001;
-		float lambda = lerp(350.f, 600.f, n);
-		float3 rgb = wl2rgbTannenbaum(lambda);
-		rgb = lerp(rgb, rgb, n);
-		result += v * rgb;
-	}
-
-	result /= (float)num_steps;
-	return float4(result, 1);
-}
-
-float2 rotate(float2 p, float a) {
-	float x = p.x;
-	float y = p.y;
-
-	float cosa = cos(a);
-	float sina = sin(a);
-
-	float x1 = x * cosa - y * sina;
-	float y1 = y * cosa + x * sina;
-
-	return float2(x1, y1);
-}
-
-float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
-	float2 uv = pos.xy / starburst_resolution - 0.5;
-
-	float3 result = 0;
-	int num_steps = 256;
-	
-	for(int i = 0; i <= num_steps; ++i){
-		float n = (float)i/(float)num_steps;
-		float a = n * TWOPI * 2;
-		float2 spiral = float2(cos(a), sin(a)) * n * 0.01;
-		float2 jittered_uv = uv + spiral;
-		float2 scaled_uv = jittered_uv;
-
-		float2 rotated_uv = rotate(scaled_uv, n * 0.05);
-		scaled_uv = rotated_uv;
-		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
-
-		float3 rgb = input_texture1.Sample(LinearSampler, scaled_uv + 0.5).rgb * !clamped;
-		result += rgb;
-	}
-
-	result /= (float)num_steps;
-
-	return float4(result, 1);
-}
-
-float fade_aperture_edge(float radius, float fade, float signed_distance) {
-	float l = radius;
-	float u = radius + fade;
-	float s = u - l;
-	float c = 1.f - saturate(saturate(signed_distance - l)/s);
-	return smoothstep(0, 1, c);
-}
- 
-float smax(float a, float b, float k) {
-	float diff = a - b;
-	float h = saturate(0.5 + 0.5 * diff / k);
-	return b + h * (diff + k * (1.0f - h));
-}
-
-float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
-
-	float2 uv = pos.xy / aperture_resolution;
-	float2 ndc = ((uv - 0.5f) * 2.f);
-
-	int num_blades = number_of_blades;
-	int num_blades_fft = number_of_blades - 1.f;
-	float angle_offset = aperture_opening;
-
-	float opening = saturate(aperture_opening/10.f);
-
-	float a = (atan2(ndc.x, ndc.y) + angle_offset)/(2*PI) + 3.f/4.f;
-	float o = frac(a * num_blades + 0.5);
-	float w1 = lerp(0.010, 0.001f, saturate((num_blades - 4)/10.f));
-	float w2 = lerp(0.025, 0.001f, saturate((num_blades - 4)/10.f));
-	float s = sin(o * 2 * PI);
-	float s1 = s * w1;
-	float s2 = s * w2;
-
-	float signed_distance = 0.f;
-	for(int i = 0; i < num_blades_fft; ++i) {
-		float angle = angle_offset + (i/float(num_blades_fft)) * PI * 2;
-		float2 axis = float2(cos(angle), sin(angle));
-		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
-	}
-
-	signed_distance += s1;
-	float aperture_fft = fade_aperture_edge(0.7, 0.02, signed_distance);
-
-	signed_distance = 0.f;
-	for(int i = 0; i < num_blades; ++i) {
-		float angle = angle_offset + (i/float(num_blades)) * PI * 2;
-		float2 axis = float2(cos(angle), sin(angle));
-		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
-	}
-
-	signed_distance += s2;
-	float aperture_mask = fade_aperture_edge(0.7, 0.1, signed_distance);
-
-	{ // Diffraction rings
-		float w = 0.2;
-		float s = signed_distance + 0.05;
-		float n = saturate(saturate(s + w) - (1.f - w));
-		
-		float x = n/w;
-		float a = x;
-		float b = -x + 1.f;
-		float c = min(a,b) * 2.f;
-		float t = (sin(x * 6.f * PI - 1.5f) + 1.f) * 0.5f;
-		float rings = pow(t*c, 1.f);
-		aperture_mask = aperture_mask + rings * 0.125;
-	}
-
-	{ // Dust
-		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_fft *= saturate(dust + 0.25);
-		aperture_mask *= saturate(dust + 0.9);
-	}
-
-	float3 rgb = float3(aperture_fft, aperture_mask, 0);
-
-	return float4(rgb, 1);
 }

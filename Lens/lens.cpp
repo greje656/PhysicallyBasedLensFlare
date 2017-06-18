@@ -493,7 +493,7 @@ namespace Shaders {
 
 	HRESULT CompileShaderFromFile(LPCWSTR shaderFile, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut, D3D_SHADER_MACRO* defines = nullptr) {
 		ID3DBlob* temp = nullptr;
-		HRESULT hr = D3DCompileFromFile(shaderFile, defines, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
+		HRESULT hr = D3DCompileFromFile(shaderFile, defines, D3D_COMPILE_STANDARD_FILE_INCLUDE, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
 		char* msg = temp ? (char*)temp->GetBufferPointer() : nullptr; msg;
 		return hr;
 	}
@@ -537,27 +537,27 @@ namespace Shaders {
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSToneMapping", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"post.hlsl", "PSToneMapping", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "VSStarburst", "vs_5_0", &blob);
+		hr = CompileShaderFromFile(L"starburst.hlsl", "VSStarburst", "vs_5_0", &blob);
 		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburst", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburst", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFilterPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "PSAperture", "ps_5_0", &blob);
+		hr = CompileShaderFromFile(L"aperture.hlsl", "PSAperture", "ps_5_0", &blob);
 		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
 		blob->Release();
 
@@ -568,7 +568,7 @@ namespace Shaders {
 			"LENGTH", resolution_string.c_str(),
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWPASS", "", 0, 0 };
-		hr = CompileShaderFromFile(L"fftslm.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
+		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
 		blob->Release();
 
@@ -576,11 +576,11 @@ namespace Shaders {
 			"LENGTH", resolution_string.c_str(),
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWCOL", "", 0, 0 };
-		hr = CompileShaderFromFile(L"fftslm.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
+		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"copycs.hlsl", "CopyTextureCS", "cs_5_0", &blob);
+		hr = CompileShaderFromFile(L"copy.hlsl", "CopyTextureCS", "cs_5_0", &blob);
 		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
 		blob->Release();
 	}
