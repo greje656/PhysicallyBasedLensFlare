@@ -12,8 +12,8 @@
 #include "ray_trace.h"
 #include "fft.h"
 
-//#define DRAW2D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -204,7 +204,7 @@ void SaveBackBuffer() {
 	ScratchImage scratch_image;
 	ID3D11Resource* resource = nullptr;
 	Textures::backbuffer_rt_view->GetResource(&resource);
-	CaptureTexture(g_pd3dDevice, g_pImmediateContext, resource, scratch_image);
+	CaptureTexture(g_pd3dDevice, d3d_context, resource, scratch_image);
 
 	static int frame_number = 0;
 	frame_number++;
@@ -1807,66 +1807,68 @@ void Render() {
 	#else
 		if(!draw2d) {
 			GhostData cb = { XMFLOAT4((float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0) };
-			g_pImmediateContext->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
+			d3d_context->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
 
-			g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
-			g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
-			g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
+			d3d_context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+			d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-			g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
-			g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
-			g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-			g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
-			g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+			d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+			d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
+			d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+			d3d_context->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
+			d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-			g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
-			g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
-			g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+			d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
+			d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
+			d3d_context->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
+			d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 
-			g_pImmediateContext->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
-			g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
+			d3d_context->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
+			d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
-			g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
-			g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
-			g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-			g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+			d3d_context->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
+			d3d_context->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
+			d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+			d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 			// Dispatch
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
+			d3d_context->Dispatch(num_groups, num_groups, 3);
+			d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 
 			// Draw
-			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-			g_pImmediateContext->RSSetState(States::rasterStateNoCull);
-			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+			d3d_context->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			d3d_context->RSSetState(States::rasterStateNoCull);
+			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 
 			if (overlay_wireframe) {
-				g_pImmediateContext->RSSetState(States::rasterStateNoCullWireframe);
-				g_pImmediateContext->PSSetShader(Shaders::flarePixelShaderDebugWireframe, nullptr, 0);
-				g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+				d3d_context->RSSetState(States::rasterStateNoCullWireframe);
+				d3d_context->PSSetShader(Shaders::flarePixelShaderDebugWireframe, nullptr, 0);
+				d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			}
 
-			g_pImmediateContext->VSSetShaderResources(0, 1, Textures::null_sr_view);
-			g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
+			d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
+			d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 		} else {
-			g_pImmediateContext->RSSetState(States::rasterStateCull);
-			g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
+			d3d_context->RSSetState(States::rasterStateCull);
+			d3d_context->IASetInputLayout(d3d_vertex_layout_2d);
 
-			g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
-			g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
-			g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+			d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+			d3d_context->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color1.x, background_color1.y, background_color1.z, background_color1.w });
+			d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-			g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
-			g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+			d3d_context->VSSetShader(Shaders::vertexShader, nullptr, 0);
+			d3d_context->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 
-			g_pImmediateContext->PSSetShader(Shaders::pixelShader, nullptr, 0);
-			g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+			d3d_context->PSSetShader(Shaders::pixelShader, nullptr, 0);
+			d3d_context->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 
 			// Trace all rays
 			std::vector<std::vector<vec3>> intersections1(num_of_rays);
 			std::vector<std::vector<vec3>> intersections2(num_of_rays);
 			std::vector<std::vector<vec3>> intersections3(num_of_rays);
+
+			vec3 dir(direction.x, direction.y, direction.z);
 			for (int i = 0; i < num_of_rays; ++i) {
 				float pos = lerp(-1.f, 1.f, (float)i / (float)(num_of_rays - 1)) * rays_spread;
 
@@ -1875,9 +1877,9 @@ void Render() {
 				Ray r1 = { a1, d1 };
 				Intersection i1 = testSPHERE(r1, nikon_28_75mm_lens_interface[0]);
 
-				vec3 a2 = i1.pos - direction;
+				vec3 a2 = i1.pos - dir;
 
-				Ray r = { a2, direction };
+				Ray r = { a2, dir };
 
 				Trace(r, 1.f, nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 			}
@@ -1886,13 +1888,13 @@ void Render() {
 			XMFLOAT4 ghost_color1 = IntersectionColor(ghost_bounce_1 - 1);
 			XMFLOAT4 ghost_color2 = IntersectionColor(ghost_bounce_2 - 1);
 			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(g_pImmediateContext, Buffers::intersectionPoints1, intersections1[i], num_of_intersections_1, intersection_color1);
+				DrawIntersections(d3d_context, Buffers::intersectionPoints1, intersections1[i], num_of_intersections_1, intersection_color1);
 
 			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(g_pImmediateContext, Buffers::intersectionPoints2, intersections2[i], num_of_intersections_2, ghost_color1);
+				DrawIntersections(d3d_context, Buffers::intersectionPoints2, intersections2[i], num_of_intersections_2, ghost_color1);
 
 			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(g_pImmediateContext, Buffers::intersectionPoints3, intersections3[i], num_of_intersections_3, ghost_color2);
+				DrawIntersections(d3d_context, Buffers::intersectionPoints3, intersections3[i], num_of_intersections_3, ghost_color2);
 
 			// Draw lenses
 			DrawLensInterface(nikon_28_75mm_lens_interface);
@@ -1900,18 +1902,18 @@ void Render() {
 	#endif
 
 	// Visualize the aperture texture:
-	//g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-	//g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-	//DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
+	//d3d_context->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	//d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+	//DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
 	// Visualize the starburst texture:
-	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
-	// DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
+	// d3d_context->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	// d3d_context->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
+	// DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 		
 	// Visualize the dust texture:
-	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
+	// d3d_context->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+	// d3d_context->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
 
 	d3d_swapchain->Present(0, 0);
 	// SaveBackBuffer();
