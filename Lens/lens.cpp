@@ -170,8 +170,8 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
 };
 
-int patch_tesselation = 32;
-int num_threads = patch_tesselation;
+int patch_tesselation = 128;
+int num_threads = 32;
 int num_groups = patch_tesselation / num_threads;
 int num_of_rays = patch_tesselation;
 int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
@@ -276,24 +276,22 @@ XMFLOAT4 lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
 // Global Variables
 //--------------------------------------------------------------------------------------
 
-namespace {
-	HINSTANCE                  g_hInst = nullptr;
-	HWND                       g_hWnd = nullptr;
+HINSTANCE                      g_hInst = nullptr;
+HWND                           g_hWnd = nullptr;
 
-	IDXGISwapChain*            d3d_swapchain = nullptr;
-	IDXGISwapChain1*           d3d_swapchain1 = nullptr;
+IDXGISwapChain*                d3d_swapchain = nullptr;
+IDXGISwapChain1*               d3d_swapchain1 = nullptr;
 
-	ID3D11InputLayout*         d3d_vertex_layout_2d = nullptr;
-	ID3D11InputLayout*         d3d_vertex_layout_3d = nullptr;
+ID3D11InputLayout*             d3d_vertex_layout_2d = nullptr;
+ID3D11InputLayout*             d3d_vertex_layout_3d = nullptr;
 
-	ID3D11Device*              d3d_device = nullptr;
-	ID3D11Device1*             d3d_device1 = nullptr;
-	ID3D11DeviceContext*       d3d_context = nullptr;
-	ID3D11DeviceContext1*      d3d_context1 = nullptr;
+ID3D11Device*                  d3d_device = nullptr;
+ID3D11Device1*                 d3d_device1 = nullptr;
+ID3D11DeviceContext*           d3d_context = nullptr;
+ID3D11DeviceContext1*          d3d_context1 = nullptr;
 
-	D3D_DRIVER_TYPE            d3d_driver_type = D3D_DRIVER_TYPE_NULL;
-	D3D_FEATURE_LEVEL          d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
-}
+D3D_DRIVER_TYPE                d3d_driver_type = D3D_DRIVER_TYPE_NULL;
+D3D_FEATURE_LEVEL              d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
 
 namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
