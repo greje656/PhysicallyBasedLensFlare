@@ -82,22 +82,26 @@ namespace LensShapes {
 	};
 }
 
+// D3d default values
 INT sampleMask = 0x0F;
 UINT offset = 0;
 UINT stride = sizeof(SimpleVertex);
 float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 
+// Geometry Data
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
 std::vector<LensInterface> nikon_28_75mm_lens_interface;
 
+// Lens inputs
 float x_dir = 0.f;
 float y_dir = 0.f;
 float aperture_opening = 7.f;
 float number_of_blades = 5.f;
-vec3 direction(0.f, 0.f, -1.f);
+XMFLOAT3 direction(0.f, 0.f, -1.f);
 
+// UI
 bool left_mouse_down = false;
 bool spacebar_down = false;
 bool key_down = false;
@@ -109,6 +113,7 @@ bool overlay_wireframe = false;
 bool aperture_needs_updating = true;
 bool draw2d = true;
 
+// Nikon Description
 const float d6  = 53.142f;
 const float d10 =  7.063f;
 const float d14 =  1.532f;
@@ -270,19 +275,25 @@ XMFLOAT4 lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
 //--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
-HINSTANCE                  g_hInst = nullptr;
-HWND                       g_hWnd = nullptr;
-D3D_DRIVER_TYPE            g_driverType = D3D_DRIVER_TYPE_NULL;
-D3D_FEATURE_LEVEL          g_featureLevel = D3D_FEATURE_LEVEL_11_0;
-ID3D11Device*              g_pd3dDevice = nullptr;
-ID3D11Device1*             g_pd3dDevice1 = nullptr;
-ID3D11DeviceContext*       g_pImmediateContext = nullptr;
-ID3D11DeviceContext1*      g_pImmediateContext1 = nullptr;
-IDXGISwapChain*            g_pSwapChain = nullptr;
-IDXGISwapChain1*           g_pSwapChain1 = nullptr;
 
-ID3D11InputLayout*         g_pVertexLayout2d = nullptr;
-ID3D11InputLayout*         g_pVertexLayout3d = nullptr;
+namespace {
+	HINSTANCE                  g_hInst = nullptr;
+	HWND                       g_hWnd = nullptr;
+
+	IDXGISwapChain*            d3d_swapchain = nullptr;
+	IDXGISwapChain1*           d3d_swapchain1 = nullptr;
+
+	ID3D11InputLayout*         d3d_vertex_layout_2d = nullptr;
+	ID3D11InputLayout*         d3d_vertex_layout_3d = nullptr;
+
+	ID3D11Device*              d3d_device = nullptr;
+	ID3D11Device1*             d3d_device1 = nullptr;
+	ID3D11DeviceContext*       d3d_context = nullptr;
+	ID3D11DeviceContext1*      d3d_context1 = nullptr;
+
+	D3D_DRIVER_TYPE            d3d_driver_type = D3D_DRIVER_TYPE_NULL;
+	D3D_FEATURE_LEVEL          d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
+}
 
 namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
@@ -323,12 +334,12 @@ namespace Textures {
 		desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 		desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 		desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_clamp_sampler);
+		d3d_device->CreateSamplerState(&desc, &Textures::linear_clamp_sampler);
 
 		desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 		desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-		g_pd3dDevice->CreateSamplerState(&desc, &Textures::linear_wrap_sampler);
+		d3d_device->CreateSamplerState(&desc, &Textures::linear_wrap_sampler);
 	}
 	
 
@@ -350,14 +361,14 @@ namespace Textures {
 		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
-		hr = g_pd3dDevice->CreateTexture2D(&desc, data, &texture);
+		hr = d3d_device->CreateTexture2D(&desc, data, &texture);
 
 		D3D11_RENDER_TARGET_VIEW_DESC rt_view_desc;
 		ZeroMemory(&rt_view_desc, sizeof(rt_view_desc));
 		rt_view_desc.Format = rt_view_desc.Format;
 		rt_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		rt_view_desc.Texture2D.MipSlice = 0;
-		hr = g_pd3dDevice->CreateRenderTargetView(texture, &rt_view_desc, &rt_view);
+		hr = d3d_device->CreateRenderTargetView(texture, &rt_view_desc, &rt_view);
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC sr_view_desc;
 		ZeroMemory(&sr_view_desc, sizeof(sr_view_desc));
@@ -365,7 +376,7 @@ namespace Textures {
 		sr_view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 		sr_view_desc.Texture2D.MostDetailedMip = 0;
 		sr_view_desc.Texture2D.MipLevels = 1;
-		hr = g_pd3dDevice->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
+		hr = d3d_device->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
 
 	}
 
@@ -386,7 +397,7 @@ namespace Textures {
 		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
-		hr = g_pd3dDevice->CreateTexture2D(&desc, nullptr, &buffer);
+		hr = d3d_device->CreateTexture2D(&desc, nullptr, &buffer);
 
 		// Create the depth stencil view
 		D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
@@ -394,13 +405,13 @@ namespace Textures {
 		view_desc.Format = desc.Format;
 		view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 		view_desc.Texture2D.MipSlice = 0;
-		hr = g_pd3dDevice->CreateDepthStencilView(buffer, &view_desc, &buffer_view);
+		hr = d3d_device->CreateDepthStencilView(buffer, &view_desc, &buffer_view);
 	}
 
 	void InitTextures() {
 		ID3D11Texture2D* backBuffer = nullptr;
-		g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
-		g_pd3dDevice->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
+		d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
+		d3d_device->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
 
 		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
 		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
@@ -468,12 +479,12 @@ namespace Shaders {
 		UINT numElements = ARRAYSIZE(layout);
 
 		hr = CompileShaderFromFile(L"visualization.hlsl", "VS", "vs_5_0", &blob);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
-		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout2d);
+		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
+		hr = d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_2d);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"visualization.hlsl", "PS", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
 		blob->Release();
 
 		std::string aperture_id_string = std::to_string(aperture_id);
@@ -485,50 +496,50 @@ namespace Shaders {
 			"NUM_THREADS", num_threads_string.c_str(),
 			"PATCH_TESSELATION", patch_tesselation_string.c_str(), 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob, lens_defines);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
-		hr = g_pd3dDevice->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &g_pVertexLayout3d);
+		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
+		hr = d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_3d);
 		blob->Release();
 		
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, lens_defines);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();	
 
 		D3D_SHADER_MACRO debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_VALUES", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
 		blob->Release();
 
 		D3D_SHADER_MACRO wireframe_debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_WIREFRAME", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob, lens_defines);
-		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
+		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"post.hlsl", "PSToneMapping", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"starburst.hlsl", "VSStarburst", "vs_5_0", &blob);
-		hr = g_pd3dDevice->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
+		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburst", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFilterPixelShader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFilterPixelShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"aperture.hlsl", "PSAperture", "ps_5_0", &blob);
-		hr = g_pd3dDevice->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
+		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
 		blob->Release();
 
 		int butterfly_count = (int)(logf(aperture_resolution) / logf(2.0));
@@ -539,7 +550,7 @@ namespace Shaders {
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWPASS", "", 0, 0 };
 		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
-		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
+		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
 		blob->Release();
 
 		D3D_SHADER_MACRO fft_defines_col[] = {
@@ -547,11 +558,11 @@ namespace Shaders {
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWCOL", "", 0, 0 };
 		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
-		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
+		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
 		blob->Release();
 
 		hr = CompileShaderFromFile(L"copy.hlsl", "CopyTextureCS", "cs_5_0", &blob);
-		hr = g_pd3dDevice->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
+		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
 		blob->Release();
 	}
 }
@@ -574,31 +585,31 @@ namespace Buffers {
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		bd.CPUAccessFlags = 0;
 		bd.ByteWidth = sizeof(InstanceUniforms);
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::instanceUniforms);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::instanceUniforms);
 
 		ZeroMemory(&bd, sizeof(bd));
 		bd.Usage = D3D11_USAGE_DEFAULT;
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		bd.CPUAccessFlags = 0;
 		bd.ByteWidth = sizeof(GlobalData);
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::globalData);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::globalData);
 
 		ZeroMemory(&bd, sizeof(bd));
 		bd.Usage = D3D11_USAGE_DEFAULT;
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		bd.CPUAccessFlags = 0;
 		bd.ByteWidth = sizeof(GhostData);
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::ghostData);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::ghostData);
 
 		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints1);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints1);
 
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_2;
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints2);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints2);
 
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_3;
-		hr = g_pd3dDevice->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints3);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints3);
 	}
 }
 
@@ -621,13 +632,13 @@ namespace States {
 		ZeroMemory(&rasterState, sizeof(D3D11_RASTERIZER_DESC));
 		rasterState.FillMode = D3D11_FILL_SOLID;
 		rasterState.CullMode = D3D11_CULL_BACK;
-		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateCull);
+		d3d_device->CreateRasterizerState(&rasterState, &States::rasterStateCull);
 
 		rasterState.CullMode = D3D11_CULL_NONE;
-		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateNoCull);
+		d3d_device->CreateRasterizerState(&rasterState, &States::rasterStateNoCull);
 
 		rasterState.FillMode = D3D11_FILL_WIREFRAME;
-		g_pd3dDevice->CreateRasterizerState(&rasterState, &States::rasterStateNoCullWireframe);
+		d3d_device->CreateRasterizerState(&rasterState, &States::rasterStateNoCullWireframe);
 
 		D3D11_BLEND_DESC BlendState;
 		D3D11_BLEND_DESC MaskedBlendState;
@@ -661,10 +672,10 @@ namespace States {
 		AdditiveBlendState.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 		AdditiveBlendState.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 
-		g_pd3dDevice->CreateBlendState(&BlendState, &States::blendStateBlend);
-		g_pd3dDevice->CreateBlendState(&BlendState, &States::blendStateNoBlend);
-		g_pd3dDevice->CreateBlendState(&MaskedBlendState, &States::blendStateMask);
-		g_pd3dDevice->CreateBlendState(&AdditiveBlendState, &States::blendStateAdd);
+		d3d_device->CreateBlendState(&BlendState, &States::blendStateBlend);
+		d3d_device->CreateBlendState(&BlendState, &States::blendStateNoBlend);
+		d3d_device->CreateBlendState(&MaskedBlendState, &States::blendStateMask);
+		d3d_device->CreateBlendState(&AdditiveBlendState, &States::blendStateAdd);
 
 		D3D11_DEPTH_STENCIL_DESC DepthStencilState;
 		ZeroMemory(&DepthStencilState, sizeof(D3D11_DEPTH_STENCIL_DESC));
@@ -715,11 +726,11 @@ namespace States {
 		DepthStencilStateGreaterOrEqualRead.FrontFace.StencilFunc = D3D11_COMPARISON_LESS_EQUAL;
 		DepthStencilStateGreaterOrEqualRead.BackFace = DepthStencilStateGreaterOrEqualRead.FrontFace;
 
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilState, &States::depthbufferState);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateFill, &States::depthbufferStateFill);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualIncr, &States::depthbufferStateGreaterOrEqualIncr);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualDecr, &States::depthbufferStateGreaterOrEqualDecr);
-		g_pd3dDevice->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualRead, &States::depthbufferStateGreaterOrEqualRead);
+		d3d_device->CreateDepthStencilState(&DepthStencilState, &States::depthbufferState);
+		d3d_device->CreateDepthStencilState(&DepthStencilStateFill, &States::depthbufferStateFill);
+		d3d_device->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualIncr, &States::depthbufferStateGreaterOrEqualIncr);
+		d3d_device->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualDecr, &States::depthbufferStateGreaterOrEqualDecr);
+		d3d_device->CreateDepthStencilState(&DepthStencilStateGreaterOrEqualRead, &States::depthbufferStateGreaterOrEqualRead);
 	}
 }
 
@@ -733,7 +744,7 @@ void UpdateLensComponents() {
 	nikon_28_75mm_lens_interface[aperture_id].sa = aperture_opening;
 	LensInterface aperture_component = nikon_28_75mm_lens_interface[aperture_id];
 
-	g_pImmediateContext->UpdateSubresource(Buffers::lensInterface, 0, &box, &aperture_component, 0, 0);
+	d3d_context->UpdateSubresource(Buffers::lensInterface, 0, &box, &aperture_component, 0, 0);
 }
 
 void ParseLensComponents() {
@@ -771,7 +782,7 @@ void ParseLensComponents() {
 
 	D3D11_SUBRESOURCE_DATA data;
 	data.pSysMem = &nikon_28_75mm_lens_interface.front();
-	hr = g_pd3dDevice->CreateBuffer(&bd, &data, &Buffers::lensInterface);
+	hr = d3d_device->CreateBuffer(&bd, &data, &Buffers::lensInterface);
 
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
 	ZeroMemory(&uaDescView, sizeof(uaDescView));
@@ -780,7 +791,7 @@ void ParseLensComponents() {
 	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
 	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
 
-	hr = g_pd3dDevice->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Textures::lensInterface_view);
+	hr = d3d_device->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Textures::lensInterface_view);
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -931,12 +942,8 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow ) {
 	g_hInst = hInstance;
 	RECT rc = { 0, 0, (LONG)backbuffer_width, (LONG)backbuffer_height };
 	AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-	g_hWnd = CreateWindow( L"LensClass", L"Lens Interface",
-							WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-							CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance,
-							nullptr );
-	if( !g_hWnd )
-		return E_FAIL;
+	g_hWnd = CreateWindow( L"LensClass", L"Lens Interface", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+							CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr );
 
 	ShowWindow( g_hWnd, nCmdShow );
 
@@ -979,7 +986,7 @@ LensShapes::Rectangle CreateUnitRectangle() {
 	ZeroMemory(&InitData, sizeof(InitData));
 	InitData.pSysMem = vertices;
 
-	g_pd3dDevice->CreateBuffer(&bd, &InitData, &rectangle.vertices);
+	d3d_device->CreateBuffer(&bd, &InitData, &rectangle.vertices);
 
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
@@ -990,7 +997,7 @@ LensShapes::Rectangle CreateUnitRectangle() {
 	ZeroMemory(&InitData2, sizeof(InitData2));
 	InitData2.pSysMem = lines;
 
-	g_pd3dDevice->CreateBuffer(&bd, &InitData2, &rectangle.lines);
+	d3d_device->CreateBuffer(&bd, &InitData2, &rectangle.lines);
 
 	return rectangle;
 }
@@ -1056,8 +1063,8 @@ LensShapes::Circle CreateUnitCircle() {
 	circle.y = 0.f;
 	circle.r = 1.f;
 
-	g_pd3dDevice->CreateBuffer(&bd1, &InitData1, &circle.triangles);
-	g_pd3dDevice->CreateBuffer(&bd2, &InitData2, &circle.lines);
+	d3d_device->CreateBuffer(&bd1, &InitData1, &circle.triangles);
+	d3d_device->CreateBuffer(&bd2, &InitData2, &circle.lines);
 
 	return circle;
 }
@@ -1120,7 +1127,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	ZeroMemory(&InitData, sizeof(InitData));
 	InitData.pSysMem = (float*)&vertices[0];
-	g_pd3dDevice->CreateBuffer(&bd, &InitData, &patch.vs_vertices);
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.vs_vertices);
 
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
@@ -1129,7 +1136,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	bd.CPUAccessFlags = 0;
 	ZeroMemory(&InitData, sizeof(InitData));
 	InitData.pSysMem = (int*)&indices[0];
-	g_pd3dDevice->CreateBuffer(&bd, &InitData, &patch.indices);
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.indices);
 
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
@@ -1141,7 +1148,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	ZeroMemory(&InitData, sizeof(InitData));
 	void* vertex_data = malloc(sizeof(PS_INPUT) * subdiv * subdiv);
 	InitData.pSysMem = vertex_data;
-	g_pd3dDevice->CreateBuffer(&bd, &InitData, &patch.cs_vertices);
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.cs_vertices);
 
 	ZeroMemory(&bd, sizeof(bd));
 	patch.cs_vertices->GetDesc(&bd);
@@ -1160,8 +1167,8 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
 	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
 
-	g_pd3dDevice->CreateShaderResourceView(patch.cs_vertices, &descView, &patch.vertices_resource_view);
-	g_pd3dDevice->CreateUnorderedAccessView(patch.cs_vertices, &uaDescView, &patch.ua_vertices_resource_view);
+	d3d_device->CreateShaderResourceView(patch.cs_vertices, &descView, &patch.vertices_resource_view);
+	d3d_device->CreateUnorderedAccessView(patch.cs_vertices, &uaDescView, &patch.ua_vertices_resource_view);
 
 	return patch;
 }
@@ -1201,14 +1208,14 @@ HRESULT InitDevice()
 	UINT numFeatureLevels = ARRAYSIZE( featureLevels );
 
 	for( UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++ ) {
-		g_driverType = driverTypes[driverTypeIndex];
-		hr = D3D11CreateDevice( nullptr, g_driverType, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
-								D3D11_SDK_VERSION, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext );
+		d3d_driver_type = driverTypes[driverTypeIndex];
+		hr = D3D11CreateDevice( nullptr, d3d_driver_type, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
+								D3D11_SDK_VERSION, &d3d_device, &d3d_feature_level, &d3d_context );
 
 		if ( hr == E_INVALIDARG ) {
 			// DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so we need to retry without it
-			hr = D3D11CreateDevice( nullptr, g_driverType, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1,
-									D3D11_SDK_VERSION, &g_pd3dDevice, &g_featureLevel, &g_pImmediateContext );
+			hr = D3D11CreateDevice( nullptr, d3d_driver_type, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1,
+									D3D11_SDK_VERSION, &d3d_device, &d3d_feature_level, &d3d_context );
 		}
 
 		if(SUCCEEDED(hr))
@@ -1219,7 +1226,7 @@ HRESULT InitDevice()
 	IDXGIFactory1* dxgiFactory = nullptr;
 	IDXGIDevice* dxgiDevice = nullptr;
 	IDXGIAdapter* adapter = nullptr;
-	hr = g_pd3dDevice->QueryInterface( __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice) );
+	hr = d3d_device->QueryInterface( __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice) );
 	hr = dxgiDevice->GetAdapter(&adapter);
 	hr = adapter->GetParent( __uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgiFactory) );
 	adapter->Release();
@@ -1229,9 +1236,9 @@ HRESULT InitDevice()
 	hr = dxgiFactory->QueryInterface( __uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2) );
 	if ( dxgiFactory2 ) {
 		// DirectX 11.1 or later
-		hr = g_pd3dDevice->QueryInterface( __uuidof(ID3D11Device1), reinterpret_cast<void**>(&g_pd3dDevice1) );
+		hr = d3d_device->QueryInterface( __uuidof(ID3D11Device1), reinterpret_cast<void**>(&d3d_device1) );
 		if (SUCCEEDED(hr)) {
-			(void) g_pImmediateContext->QueryInterface( __uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&g_pImmediateContext1) );
+			(void) d3d_context->QueryInterface( __uuidof(ID3D11DeviceContext1), reinterpret_cast<void**>(&d3d_context1) );
 		}
 
 		DXGI_SWAP_CHAIN_DESC1 sd;
@@ -1244,9 +1251,9 @@ HRESULT InitDevice()
 		sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 		sd.BufferCount = 1;
 
-		hr = dxgiFactory2->CreateSwapChainForHwnd( g_pd3dDevice, g_hWnd, &sd, nullptr, nullptr, &g_pSwapChain1 );
+		hr = dxgiFactory2->CreateSwapChainForHwnd( d3d_device, g_hWnd, &sd, nullptr, nullptr, &d3d_swapchain1 );
 		if (SUCCEEDED(hr)) {
-			hr = g_pSwapChain1->QueryInterface( __uuidof(IDXGISwapChain), reinterpret_cast<void**>(&g_pSwapChain) );
+			hr = d3d_swapchain1->QueryInterface( __uuidof(IDXGISwapChain), reinterpret_cast<void**>(&d3d_swapchain) );
 		}
 
 		dxgiFactory2->Release();
@@ -1266,7 +1273,7 @@ HRESULT InitDevice()
 		sd.SampleDesc.Quality = 0;
 		sd.Windowed = TRUE;
 
-		hr = dxgiFactory->CreateSwapChain( g_pd3dDevice, &sd, &g_pSwapChain );
+		hr = dxgiFactory->CreateSwapChain( d3d_device, &sd, &d3d_swapchain );
 	}
 
 	// Setup the viewport
@@ -1277,7 +1284,7 @@ HRESULT InitDevice()
 	vp.MaxDepth = 1.f;
 	vp.TopLeftX = 0.f;
 	vp.TopLeftY = 0.f;
-	g_pImmediateContext->RSSetViewports(1, &vp);
+	d3d_context->RSSetViewports(1, &vp);
 
 	// Note this tutorial doesn't handle full-screen swapchains so we block the ALT+ENTER shortcut
 	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
@@ -1289,7 +1296,7 @@ HRESULT InitDevice()
 	Buffers::InitBuffers();
 	States::InitStates();
 
-	FFT::InitFFTTetxtures(g_pd3dDevice, (int)aperture_resolution);
+	FFT::InitFFTTetxtures(d3d_device, (int)aperture_resolution);
 
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
@@ -1352,14 +1359,14 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Rectangle& rec
 	context->ClearRenderTargetView(rt_view, XMVECTORF32{ 0, 0, 0, 0 });
 	context->ClearDepthStencilView(depth_buffer_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-	context->IASetInputLayout(g_pVertexLayout2d);
+	context->IASetInputLayout(d3d_vertex_layout_2d);
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 	context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
 	context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 
 	context->Draw(6, 0);
 
-	g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+	d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
 }
 
@@ -1385,17 +1392,17 @@ void DrawFlat(LensInterface& right) {
 	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.sa };
 	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w };
 
-	g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement1, true);
+	d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+	d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+	DrawRectangle(d3d_context, unit_square, flat_fill_color, mask_placement1, true);
 
-	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 0);
-	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement2, true);
+	d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 0);
+	DrawRectangle(d3d_context, unit_square, flat_fill_color, mask_placement2, true);
 
-	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
-	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-	DrawRectangle(g_pImmediateContext, unit_square, flat_fill_color, mask_placement3, true);
-	DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement3, false);
+	d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
+	d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+	DrawRectangle(d3d_context, unit_square, flat_fill_color, mask_placement3, true);
+	DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement3, false);
 }
 
 XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
@@ -1452,30 +1459,30 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float lr = _left.radius * global_scale;
 		XMFLOAT4 left_placement = { lx, 1.f, lr, lr };
 
-		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
+		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
-		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
+		DrawCircle(d3d_context, unit_circle, fill_color, right_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualDecr, 2);
-		DrawCircle(g_pImmediateContext, unit_circle, fill_color, left_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualDecr, 2);
+		DrawCircle(d3d_context, unit_circle, fill_color, left_placement, true);
 
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 2);
-		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 2);
+		DrawRectangle(d3d_context, unit_square, fill_color, mask_placement, true);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement2, false);
 
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		DrawCircle(d3d_context, unit_circle, stroke_color, left_placement, false);
+		DrawCircle(d3d_context, unit_circle, stroke_color, right_placement, false);
 	}
 	//     / \
 	//    |   |
@@ -1499,29 +1506,29 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float rr = right.radius * global_scale;
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
-		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, true);
+		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 1);
+		DrawCircle(d3d_context, unit_circle, stroke_color, left_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 2);
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualIncr, 2);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		DrawCircle(d3d_context, unit_circle, fill_color, right_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 3);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 3);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement2, false);
 
-		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement, true);
+		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		DrawCircle(d3d_context, unit_circle, stroke_color, left_placement, false);
+		DrawCircle(d3d_context, unit_circle, stroke_color, right_placement, false);
 	}
 	//   \    /
 	//    |  |
@@ -1545,36 +1552,36 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		float rr = right.radius * global_scale;
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
-		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
+		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		DrawRectangle(d3d_context, unit_square, fill_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 0);
-		DrawCircle(g_pImmediateContext, unit_circle, fill_color, left_placement, true);
-		DrawCircle(g_pImmediateContext, unit_circle, fill_color, right_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 0);
+		DrawCircle(d3d_context, unit_circle, fill_color, left_placement, true);
+		DrawCircle(d3d_context, unit_circle, fill_color, right_placement, true);
 
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
-		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
-		DrawRectangle(g_pImmediateContext, unit_square, stroke_color, mask_placement2, false);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
+		DrawRectangle(d3d_context, unit_square, fill_color, mask_placement, true);
+		DrawRectangle(d3d_context, unit_square, stroke_color, mask_placement2, false);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateFill, 1);
-		g_pImmediateContext->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
-		DrawRectangle(g_pImmediateContext, unit_square, fill_color, mask_placement, true);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateFill, 1);
+		d3d_context->OMSetBlendState(States::blendStateMask, blendFactor, sampleMask);
+		DrawRectangle(d3d_context, unit_square, fill_color, mask_placement, true);
 
-		g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, left_placement, false);
-		DrawCircle(g_pImmediateContext, unit_circle, stroke_color, right_placement, false);
+		d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferStateGreaterOrEqualRead, 1);
+		DrawCircle(d3d_context, unit_circle, stroke_color, left_placement, false);
+		DrawCircle(d3d_context, unit_circle, stroke_color, right_placement, false);
 	}
 }
 
 void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
 
-	g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
-	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+	d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
+	d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
+	d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 
 	int i = 0;
 	while (i < (int)lens_interface.size()) {
@@ -1609,8 +1616,8 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->UpdateSubresource(buffer, 0, nullptr, ptr, 0, 0);
 	context->UpdateSubresource(Buffers::instanceUniforms, 0, nullptr, &cb, 0, 0);
 	
-	g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
-	g_pImmediateContext->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
+	d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
+	d3d_context->OMSetBlendState(States::blendStateBlend, blendFactor, sampleMask);
 
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
 	context->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
@@ -1621,10 +1628,12 @@ void UpdateGlobals() {
 	time += speed;
 	
 	#if defined(DRAWLENSFLARE)
-		direction = normalize(vec3(-x_dir, y_dir, -1.f));
+		vec3 dir = normalize(vec3(-x_dir, y_dir, -1.f));
 	#else
-		direction = normalize(vec3(0, y_dir, -1.f));
+		vec3 dir = normalize(vec3(0, y_dir, -1.f));
 	#endif
+	
+	direction = XMFLOAT3(dir.x, dir.y, dir.z);
 
 	GlobalData cb = {
 		time,
@@ -1640,33 +1649,33 @@ void UpdateGlobals() {
 		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution,0)
 	};
 
-	g_pImmediateContext->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
+	d3d_context->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
 }
 
 void DrawAperture() {
-	g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
-	g_pImmediateContext->PSSetShader(Shaders::aperture_ps_shader, nullptr, 0);
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
-	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
+	d3d_context->VSSetShader(Shaders::vertexShader, nullptr, 0);
+	d3d_context->PSSetShader(Shaders::aperture_ps_shader, nullptr, 0);
+	d3d_context->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
+	d3d_context->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
 
-	g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-	g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	d3d_context->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+	d3d_context->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
 
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depthbuffer_view);
+	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depthbuffer_view);
 
-	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
+	d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 }
 
 void DrawStarBurst() {
 	float clear_color[] = { 0,0,0,0 };
 	
 	// Setup input
-	FFT::CopyTextureNoStretch(g_pImmediateContext, Textures::aperture_sr_view, FFT::mTextureUAV[FFT::FFTTexture_Real0], (int)aperture_resolution, Shaders::fftCopyShader);
-	g_pImmediateContext->ClearRenderTargetView(FFT::mRenderTargetViews[FFT::FFTTexture_Imaginary0], clear_color);
+	FFT::CopyTextureNoStretch(d3d_context, Textures::aperture_sr_view, FFT::mTextureUAV[FFT::FFTTexture_Real0], (int)aperture_resolution, Shaders::fftCopyShader);
+	d3d_context->ClearRenderTargetView(FFT::mRenderTargetViews[FFT::FFTTexture_Imaginary0], clear_color);
 
-	FFT::RunDispatchSLM(g_pImmediateContext, 0, Shaders::fftRowComputeShader, (int)aperture_resolution);
-	FFT::RunDispatchSLM(g_pImmediateContext, 1, Shaders::fftColComputeShader, (int)aperture_resolution);
+	FFT::RunDispatchSLM(d3d_context, 0, Shaders::fftRowComputeShader, (int)aperture_resolution);
+	FFT::RunDispatchSLM(d3d_context, 1, Shaders::fftColComputeShader, (int)aperture_resolution);
 
 	D3D11_VIEWPORT vp;
 	vp.Width = (FLOAT)starburst_resolution;
@@ -1675,25 +1684,25 @@ void DrawStarBurst() {
 	vp.MaxDepth = 1.f;
 	vp.TopLeftX = 0.f;
 	vp.TopLeftY = 0.f;
-	g_pImmediateContext->RSSetViewports(1, &vp);
+	d3d_context->RSSetViewports(1, &vp);
 
-	g_pImmediateContext->PSSetShader(Shaders::starburstFromFFTPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetShaderResources(1, 2, FFT::mTextureSRV);
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
+	d3d_context->PSSetShader(Shaders::starburstFromFFTPixelShader, nullptr, 0);
+	d3d_context->PSSetShaderResources(1, 2, FFT::mTextureSRV);
+	d3d_context->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
+	d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
-	g_pImmediateContext->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
-	g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
-	g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-	DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
-	g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
+	d3d_context->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
+	d3d_context->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
+	d3d_context->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
+	d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	vp.Width = (FLOAT)backbuffer_width;
 	vp.Height = (FLOAT)backbuffer_height;
-	g_pImmediateContext->RSSetViewports(1, &vp);
+	d3d_context->RSSetViewports(1, &vp);
 }
 
 //--------------------------------------------------------------------------------------
@@ -1710,30 +1719,30 @@ void Render() {
 	}
 
 	#if defined(DRAWLENSFLARE)
-		g_pImmediateContext->IASetInputLayout(g_pVertexLayout3d);
+		d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
 
-		g_pImmediateContext->RSSetState(States::rasterStateNoCull);
-		g_pImmediateContext->OMSetRenderTargets(1, &Textures::hdr_rt_view, Textures::depthstencil_view);
-		g_pImmediateContext->ClearRenderTargetView(Textures::hdr_rt_view, XMVECTORF32{ 0, 0, 0, 0 });
-		g_pImmediateContext->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+		d3d_context->RSSetState(States::rasterStateNoCull);
+		d3d_context->OMSetRenderTargets(1, &Textures::hdr_rt_view, Textures::depthstencil_view);
+		d3d_context->ClearRenderTargetView(Textures::hdr_rt_view, XMVECTORF32{ 0, 0, 0, 0 });
+		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-		g_pImmediateContext->OMSetDepthStencilState(States::depthbufferState, 0);
-		g_pImmediateContext->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
+		d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
+		d3d_context->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
 
-		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
-		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		d3d_context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		g_pImmediateContext->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
-		g_pImmediateContext->VSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
+		d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globalData);
 
-		g_pImmediateContext->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
-		g_pImmediateContext->PSSetConstantBuffers(1, 1, &Buffers::globalData);
-		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
-		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
+		d3d_context->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
+		d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+		d3d_context->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
 
-		g_pImmediateContext->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
-		g_pImmediateContext->CSSetConstantBuffers(1, 1, &Buffers::globalData);
-		g_pImmediateContext->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
+		d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
+		d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
 		
 		int bounce1 = 2;
 		int bounce2 = 1;
@@ -1748,56 +1757,52 @@ void Render() {
 			}
 
 			GhostData cb = { XMFLOAT4((float)bounce1, (float)bounce2, 0, 0) };
-			g_pImmediateContext->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
+			d3d_context->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
 
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
-			g_pImmediateContext->Dispatch(num_groups, num_groups, 3);
-			g_pImmediateContext->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
-			g_pImmediateContext->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+			d3d_context->Dispatch(num_groups, num_groups, 3);
+			d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 
-			g_pImmediateContext->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
-			g_pImmediateContext->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
-			g_pImmediateContext->VSSetShaderResources(0, 1, Textures::null_sr_view);
+			d3d_context->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+			d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
 			bounce1++;
 		}
 
+		// Draw Starburst
+		d3d_context->VSSetShader(Shaders::starburstVertexShader, nullptr, 0);
+		d3d_context->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
+		d3d_context->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
+		d3d_context->PSSetShader(Shaders::starburstPixelShader, nullptr, 0);
+		d3d_context->RSSetState(States::rasterStateCull);
 
+		d3d_context->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
 
+		d3d_context->IASetInputLayout(d3d_vertex_layout_2d);
+		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		d3d_context->IASetVertexBuffers(0, 1, &unit_square.vertices, &stride, &offset);
+		d3d_context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
 
-		g_pImmediateContext->VSSetShader(Shaders::starburstVertexShader, nullptr, 0);
-		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::starburst_filtered_sr_view);
-		g_pImmediateContext->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-		g_pImmediateContext->PSSetShader(Shaders::starburstPixelShader, nullptr, 0);
-		g_pImmediateContext->RSSetState(States::rasterStateCull);
+		d3d_context->Draw(6, 0);
 
-		g_pImmediateContext->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
+		// Tonemap
+		d3d_context->RSSetState(States::rasterStateCull);
+		d3d_context->IASetInputLayout(d3d_vertex_layout_2d);
+		d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
+		d3d_context->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ 0,0,0,0});
 
-		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
-		g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		g_pImmediateContext->IASetVertexBuffers(0, 1, &unit_square.vertices, &stride, &offset);
-		g_pImmediateContext->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+		d3d_context->VSSetShader(Shaders::vertexShader, nullptr, 0);
+		d3d_context->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
+		d3d_context->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+		d3d_context->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
+		d3d_context->PSSetShaderResources(1, 1, &Textures::hdr_sr_view);
 
-		g_pImmediateContext->Draw(6, 0);
+		DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
 
-
-
-
-		g_pImmediateContext->RSSetState(States::rasterStateCull);
-		g_pImmediateContext->IASetInputLayout(g_pVertexLayout2d);
-		g_pImmediateContext->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
-		g_pImmediateContext->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ 0,0,0,0});
-
-		g_pImmediateContext->VSSetShader(Shaders::vertexShader, nullptr, 0);
-		g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
-		g_pImmediateContext->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-		g_pImmediateContext->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-		g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::hdr_sr_view);
-
-		DrawFullscreenQuad(g_pImmediateContext, unit_square, fill_color1, Textures::backbuffer_rt_view, Textures::depthstencil_view);
-
-		g_pImmediateContext->PSSetShaderResources(1, 1, Textures::null_sr_view);
+		d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	#else
 		if(!draw2d) {
@@ -1908,6 +1913,6 @@ void Render() {
 	// g_pImmediateContext->PSSetShader(Shaders::toneMapPixelShader, nullptr, 0);
 	// g_pImmediateContext->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
 
-	g_pSwapChain->Present(0, 0);
+	d3d_swapchain->Present(0, 0);
 	// SaveBackBuffer();
 }
