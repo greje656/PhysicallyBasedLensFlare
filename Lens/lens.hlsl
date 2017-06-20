@@ -3,7 +3,7 @@
 struct PSInput {
 	float4 pos : SV_POSITION;
 	float4 color : TEXCOORD0;
-	float4 mask : TEXCOORD1;
+	float4 coordinates : TEXCOORD1;
 	float4 reflectance : TEXCOORD2;
 };
 
@@ -164,9 +164,9 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 			continue;
 
 		// do reflection / refraction for spher . surfaces
-		float n0 = r.dir.z < 0.f ? F.n.z : F.n.x;
+		float n0 = r.dir.z < 0.f ? F.n.x : F.n.z;
 		// float n1 = F.n.y;
-		float n2 = r.dir.z < 0.f ? F.n.x : F.n.z;
+		float n2 = r.dir.z < 0.f ? F.n.z : F.n.x;
 
 		if (!bReflect) { // refraction
 			r.dir = refract(r.dir,i.norm,n0/n2);
@@ -286,7 +286,7 @@ PSInput getTraceResult(float2 ndc, float wavelength){
 
 	PSInput result;
 	result.pos = float4(g.pos.xyz, 1.f);
-	result.mask = float4(ndc, 0, 1);
+	result.coordinates = float4(ndc, g.tex.xy);
 	result.color = g.tex;
 	result.reflectance = float4(0,0,0, g.tex.a);
 
@@ -313,7 +313,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 
 	uav_buffer[offset].pos = result.pos;
 	uav_buffer[offset].color = result.color;
-	uav_buffer[offset].mask = result.mask;
+	uav_buffer[offset].coordinates = result.coordinates;
 
 	if(gid.z == 0) {
 		uav_buffer[offset].reflectance.r = result.reflectance.a;
@@ -323,7 +323,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 		uav_buffer[offset].reflectance.b = result.reflectance.a;
 	}
 
-	uav_buffer[offset].mask.w = GetArea(pos);
+	uav_buffer[offset].color.w = GetArea(pos);
 
 }
 
@@ -345,13 +345,13 @@ PSInput VS(uint id : SV_VertexID) {
 float4 PS(in PSInput input) : SV_Target {
 
 	float4 color = input.color;
-	float4 mask = input.mask;
+	float4 coordinates = input.coordinates;
 
-	float2 aperture_uv = (mask.xy + 1.f)/2.f;
+	float2 aperture_uv = (coordinates.zw + 1.f)/2.f;
 	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).g;
 	
 	float fade = 0.2;
-	float lens_distance = length(mask.xy);
+	float lens_distance = length(coordinates.xy);
 	float sun_disk = 1 - saturate((lens_distance - 1.f + fade)/fade);
 	sun_disk = smoothstep(0, 1, sun_disk);
 	sun_disk *= lerp(0.5, 1, saturate(lens_distance));
@@ -362,7 +362,7 @@ float4 PS(in PSInput input) : SV_Target {
 
 	float alpha1 = color.z < 1.0f;
 	float alpha2 = sun_disk;
-	float alpha3 = mask.w;
+	float alpha3 = color.w;
 	float alpha4 = aperture;
 	float alpha5 = aperture_disk;
 	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;

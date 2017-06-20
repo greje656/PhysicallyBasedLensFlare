@@ -12,8 +12,8 @@
 #include "ray_trace.h"
 #include "fft.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -170,7 +170,7 @@ std::vector<PatentFormat> nikon_28_75mm_lens_components = {
 	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
 };
 
-int patch_tesselation = 128;
+int patch_tesselation = 32;
 int num_threads = 32;
 int num_groups = patch_tesselation / num_threads;
 int num_of_rays = patch_tesselation;

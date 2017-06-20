@@ -207,8 +207,8 @@ Ray Trace(
 		if (!F.flat)
 			r.tex.z = max(r.tex.z, length_xy(i.pos) / F.sa);
 		else if (T == AP_IDX) {
-			r.tex.x = i.pos.x / INTERFACE[AP_IDX].radius;
-			r.tex.y = i.pos.y / INTERFACE[AP_IDX].radius;
+			r.tex.x = i.pos.x / INTERFACE[AP_IDX].sa;
+			r.tex.y = i.pos.y / INTERFACE[AP_IDX].sa;
 		};
 
 		r.dir = normalize(i.pos-r.pos);
