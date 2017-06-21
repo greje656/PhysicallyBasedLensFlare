@@ -92,7 +92,7 @@ float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
-std::vector<LensInterface> nikon_28_75mm_lens_interface;
+std::vector<LensInterface> lens_interface;
 
 // Lens inputs
 float x_dir = 0.f;
@@ -113,73 +113,111 @@ bool overlay_wireframe = false;
 bool aperture_needs_updating = true;
 bool draw2d = true;
 
-// Nikon Description
-const float d6  = 53.142f;
-const float d10 =  7.063f;
-const float d14 =  1.532f;
-const float dAp =  2.800f;
-const float d20 = 16.889f;
-const float Bf  = 39.683f;
-const int aperture_id = 14;
+namespace nikon_28_75mm {
+	// Nikon Description
+	const float d6 = 53.142f;
+	const float d10 = 7.063f;
+	const float d14 = 1.532f;
+	const float dAp = 2.800f;
+	const float d20 = 16.889f;
+	const float Bf = 39.683f;
+	const int aperture_id = 14;
 
-std::vector<PatentFormat> nikon_28_75mm_lens_components = {
-	{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 530 },
-	{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 600 }, 
+	std::vector<PatentFormat> lens_components = {
+		{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 530 },
+		{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 600 },
 
-	{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f, 570 }, 
-	{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f, 660 }, 
+		{  -172.809f,  2.100f, 1.58913f, false, 2.7f, 26.2f, 570 },
+		{    39.894f,  1.000f, 1.00000f, false, 2.7f, 26.2f, 660 },
 
-	{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f, 330 }, 
-	{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f, 544 }, 
+		{    49.820f,  4.400f, 1.86074f, false, 0.5f, 20.0f, 330 },
+		{    74.750f,      d6, 1.00000f, false, 0.5f, 20.0f, 544 },
 
-	{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f, 740 }, 
-	{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f, 411 }, 
+		{    63.402f,  1.600f, 1.86074f, false, 0.5f, 16.1f, 740 },
+		{    37.530f,  8.600f, 1.51680f, false, 0.5f, 16.1f, 411 },
 
-	{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f, 580 }, 
-	{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f, 730 }, 
+		{   -75.887f,  1.600f, 1.80458f, false, 0.5f, 16.0f, 580 },
+		{   -97.792f,     d10, 1.00000f, false, 0.5f, 16.5f, 730 },
 
-	{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f, 700 }, 
-	{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f, 440 }, 
+		{    96.034f,  3.600f, 1.62041f, false, 0.5f, 18.0f, 700 },
+		{   261.743f,  0.100f, 1.00000f, false, 0.5f, 18.0f, 440 },
 
-	{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 }, 
-	{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 }, 
+		{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 },
+		{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 },
 
-	{       0.0f,     dAp, 1.00000f, true,  18.f, aperture_opening, 440 },
+		{       0.0f,     dAp, 1.00000f, true,  18.f, aperture_opening, 440 },
 
-	{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 }, 
+		{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 },
 
-	{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f, 770 }, 
-	{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f, 820 }, 
+		{   -62.929f,  1.450f, 1.51680f, false, 0.1f, 13.0f, 770 },
+		{   121.380f,  2.500f, 1.00000f, false, 4.0f, 13.1f, 820 },
 
-	{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f, 200 }, 
+		{   -85.723f,  1.400f, 1.49782f, false, 4.0f, 13.0f, 200 },
 
-	{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f, 540 }, 
-	{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f, 580 }, 
+		{    31.093f,  2.600f, 1.80458f, false, 4.0f, 13.1f, 540 },
+		{    84.758f,     d20, 1.00000f, false, 0.5f, 13.0f, 580 },
 
-	{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f, 533 }, 
+		{   459.690f,  1.400f, 1.86074f, false, 1.0f, 15.0f, 533 },
 
-	{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f, 666 }, 
-	{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f, 500 }, 
+		{    40.240f,  7.300f, 1.49782f, false, 1.0f, 15.0f, 666 },
+		{   -49.771f,  0.100f, 1.00000f, false, 1.0f, 15.2f, 500 },
 
-	{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f, 487 }, 
-	{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f, 671 }, 
+		{    62.369f,  7.000f, 1.67025f, false, 1.0f, 16.0f, 487 },
+		{   -76.454f,  5.200f, 1.00000f, false, 1.0f, 16.0f, 671 },
 
-	{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f, 487 }, 
-	{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f, 732 }, 
+		{   -32.524f,  2.000f, 1.80454f, false, 0.5f, 17.0f, 487 },
+		{   -50.194f,      Bf, 1.00000f, false, 0.5f, 17.0f, 732 },
 
-	{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
-};
+		{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
+	};
+}
+
+namespace angenieux {
+	const int aperture_id = 7;
+	std::vector<PatentFormat> lens_components = {		
+		{   164.13f,   10.99f, 1.67510f, false, 0.5f, 52.0f, 432 },
+		{   559.20f,    0.23f, 1.00000f, false, 0.5f, 52.0f, 532 },
+
+		{   100.12f,   11.45f, 1.66890f, false, 0.5f, 48.0f, 382 },
+		{   213.54f,    0.23f, 1.00000f, false, 0.5f, 48.0f, 422 },
+		
+		{    58.04f,   22.95f, 1.69131f, false, 0.5f, 36.0f, 572 },
+
+		{  2551.10f,    2.58f, 1.67510f, false, 0.5f, 42.0f, 612 },
+		{    32.39f,   30.66f, 1.00000f, false, 0.3f, 36.0f, 732 },
+		
+		{      0.0f,   10.00f, 1.00000f, true,  25.f, aperture_opening, 440 },
+
+		{   -40.42f,    2.74f, 1.69920f, false, 1.5f, 13.0f, 602 },
+
+		{   192.98f,   27.92f, 1.62040f, false, 4.0f, 36.0f, 482 },
+		{   -55.53f,    0.23f, 1.00000f, false, 0.5f, 36.0f, 662 },
+
+		{   192.98f,    7.98f, 1.69131f, false, 0.5f, 35.0f, 332 },
+		{  -225.30f,    0.23f, 1.00000f, false, 0.5f, 35.0f, 412 },
+
+		{   175.09f,    8.48f, 1.69130f, false, 0.5f, 35.0f, 532 },
+		{  -203.55f,     40.f, 1.00000f, false, 0.5f, 35.0f, 632 },
+
+		{       0.f,      5.f, 1.00000f,  true, 10.f,   5.f, 500 }
+	};
+}
+
+//int num_of_lens_components = (int)nikon_28_75mm::lens_components.size();
+//int aperture_id = nikon_28_75mm::aperture_id;
+
+int num_of_lens_components = (int)angenieux::lens_components.size();
+int aperture_id = angenieux::aperture_id;
 
 int patch_tesselation = 32;
 int num_threads = 32;
 int num_groups = patch_tesselation / num_threads;
 int num_of_rays = patch_tesselation;
-int num_of_lens_components = (int)nikon_28_75mm_lens_components.size() + 1;
-int ghost_bounce_1 = 21;
-int ghost_bounce_2 = 10;
-int num_of_intersections_1 = num_of_lens_components;
-int num_of_intersections_2 = num_of_lens_components;
-int num_of_intersections_3 = num_of_lens_components;
+int ghost_bounce_1 = 3;
+int ghost_bounce_2 = 1;
+int num_of_intersections_1 = num_of_lens_components + 1;
+int num_of_intersections_2 = num_of_lens_components + 1;
+int num_of_intersections_3 = num_of_lens_components + 1;
 int num_points_per_cirlces = 200;
 int num_vertices_per_cirlces = num_points_per_cirlces * 3;
 int num_vertices_per_bundle = (patch_tesselation - 1) * (patch_tesselation - 1);
@@ -739,21 +777,21 @@ void UpdateLensComponents() {
 	box.back = 1;
 	box.bottom = 1;
 
-	nikon_28_75mm_lens_interface[aperture_id].sa = aperture_opening;
-	LensInterface aperture_component = nikon_28_75mm_lens_interface[aperture_id];
+	lens_interface[aperture_id].sa = aperture_opening;
+	LensInterface aperture_component = lens_interface[aperture_id];
 
 	d3d_context->UpdateSubresource(Buffers::lensInterface, 0, &box, &aperture_component, 0, 0);
 }
 
 void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
-	nikon_28_75mm_lens_interface.resize(nikon_28_75mm_lens_components.size());
+	lens_interface.resize(num_of_lens_components);
 
-	for (int i = (int)nikon_28_75mm_lens_components.size() - 1; i >= 0; --i) {
-		PatentFormat& entry = nikon_28_75mm_lens_components[i];
+	for (int i = num_of_lens_components - 1; i >= 0; --i) {
+		PatentFormat& entry = angenieux::lens_components[i];
 		total_lens_distance += entry.d;
 
-		float left_ior = i == 0 ? 1.f : nikon_28_75mm_lens_components[i - 1].n;
+		float left_ior = i == 0 ? 1.f : angenieux::lens_components[i - 1].n;
 		float right_ior = entry.n;
 
 		if (right_ior != 1.f) {
@@ -765,7 +803,7 @@ void ParseLensComponents() {
 		vec3 n = { left_ior, 1.f, right_ior };
 
 		LensInterface component = { center, entry.r, n, entry.h, entry.coating_thickness, (float)entry.flat, total_lens_distance, entry.w };
-		nikon_28_75mm_lens_interface[i] = component;
+		lens_interface[i] = component;
 	}
 
 	HRESULT hr;
@@ -775,11 +813,11 @@ void ParseLensComponents() {
 	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	bd.CPUAccessFlags = 0;
-	bd.ByteWidth = (int)nikon_28_75mm_lens_interface.size() * (int)sizeof(LensInterface);
+	bd.ByteWidth = (int)lens_interface.size() * (int)sizeof(LensInterface);
 	bd.StructureByteStride = sizeof(LensInterface);
 
 	D3D11_SUBRESOURCE_DATA data;
-	data.pSysMem = &nikon_28_75mm_lens_interface.front();
+	data.pSysMem = &lens_interface.front();
 	hr = d3d_device->CreateBuffer(&bd, &data, &Buffers::lensInterface);
 
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
@@ -839,13 +877,13 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 				ghost_bounce_1 = std::max<int>(2, ghost_bounce_1 - 1);
 
 			if (!key_down && msg.wParam == 39)
-				ghost_bounce_1 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_1 + 1);
+				ghost_bounce_1 = std::min<int>((int)lens_interface.size() - 2, ghost_bounce_1 + 1);
 
 			if (!key_down && msg.wParam == 40)
 				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
 
 			if (!key_down && msg.wParam == 38) {
-				ghost_bounce_2 = std::min<int>((int)nikon_28_75mm_lens_interface.size() - 2, ghost_bounce_2 + 1);
+				ghost_bounce_2 = std::min<int>((int)lens_interface.size() - 2, ghost_bounce_2 + 1);
 				ghost_bounce_2 = std::min<int>(ghost_bounce_1 - 2, ghost_bounce_2);
 			}
 		
@@ -1410,7 +1448,7 @@ XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
 }
 
 XMFLOAT4 IntersectionColor(int i) {
-	float ior1 = nikon_28_75mm_lens_interface[i].n.x == 1.f ? nikon_28_75mm_lens_interface[i].n.z : nikon_28_75mm_lens_interface[i].n.x;
+	float ior1 = lens_interface[i].n.x == 1.f ? lens_interface[i].n.z : lens_interface[i].n.x;
 	return LensColor(ior1, intersection_color2, intersection_color3);
 }
 
@@ -1575,7 +1613,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 	}
 }
 
-void DrawLensInterface(std::vector<LensInterface>& lens_interface) {
+void DrawLensInterface() {
 
 	d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 	d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
@@ -1636,15 +1674,15 @@ void UpdateGlobals() {
 	GlobalData cb = {
 		time,
 		rays_spread,
-		nikon_28_75mm_lens_interface[nikon_28_75mm_lens_interface.size() - 1].sa,
+		lens_interface[lens_interface.size() - 1].sa,
 
-		aperture_id,
-		(float)nikon_28_75mm_lens_interface.size(),
+		(float)aperture_id,
+		(float)lens_interface.size(),
 		coating_quality,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
 		XMFLOAT4(direction.x, direction.y, direction.z, aperture_resolution),
-		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution,0)
+		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution, 0.f)
 	};
 
 	d3d_context->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
@@ -1745,12 +1783,12 @@ void Render() {
 		int bounce1 = 2;
 		int bounce2 = 1;
 		while (true) {
-			if (bounce1 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+			if (bounce1 >= (int)(lens_interface.size() - 1)) {
 				bounce2++;
 				bounce1 = bounce2 + 1;
 			}
 
-			if (bounce2 >= (int)(nikon_28_75mm_lens_interface.size() - 1)) {
+			if (bounce2 >= (int)(lens_interface.size() - 1)) {
 				break;
 			}
 
@@ -1873,13 +1911,13 @@ void Render() {
 				vec3 a1 = vec3(0.0f, pos, 400.f);
 				vec3 d1 = vec3(0.0f, 0.0f, -1.f);
 				Ray r1 = { a1, d1 };
-				Intersection i1 = testSPHERE(r1, nikon_28_75mm_lens_interface[0]);
+				Intersection i1 = testSPHERE(r1, lens_interface[0]);
 
 				vec3 a2 = i1.pos - dir;
 
 				Ray r = { a2, dir };
 
-				Trace(r, 1.f, nikon_28_75mm_lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
+				Trace(r, 1.f, lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 			}
 
 			// Draw all rays
@@ -1895,7 +1933,7 @@ void Render() {
 				DrawIntersections(d3d_context, Buffers::intersectionPoints3, intersections3[i], num_of_intersections_3, ghost_color2);
 
 			// Draw lenses
-			DrawLensInterface(nikon_28_75mm_lens_interface);
+			DrawLensInterface();
 		}
 	#endif
 

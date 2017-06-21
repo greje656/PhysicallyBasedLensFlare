@@ -25,9 +25,9 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	float o = frac(a * num_of_blades + 0.5);
 	float w1 = lerp(0.010, 0.001f, saturate((num_of_blades - 4)/10.f));
 	float w2 = lerp(0.025, 0.001f, saturate((num_of_blades - 4)/10.f));
-	float s = sin(o * 2 * PI);
-	float s1 = s * w1;
-	float s2 = s * w2;
+	float s0 = sin(o * 2 * PI);
+	float s1 = s0 * w1;
+	float s2 = s0 * w2;
 
 	// fft aperture shape
 	float signed_distance = 0.f;
