@@ -56,9 +56,7 @@ struct GlobalData {
 	XMFLOAT4 aperture_opening;
 };
 
-struct GhostData {
-	XMFLOAT4 bounces;
-};
+typedef XMFLOAT4 GhostData;
 
 namespace LensShapes {
 	struct Rectangle {
@@ -75,10 +73,19 @@ namespace LensShapes {
 	struct Patch {
 		int subdiv;
 		ID3D11Buffer* indices;
-		ID3D11Buffer* vs_vertices;
 		ID3D11Buffer* cs_vertices;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
+	};
+
+	struct PatchData {
+		int subdiv;
+		ID3D11Buffer* indices;
+		ID3D11Buffer* cs_vertices;
+		ID3D11Buffer* ghostData = nullptr;
+		ID3D11ShaderResourceView* vertices_resource_view;
+		ID3D11UnorderedAccessView* ua_vertices_resource_view;
+		ID3D11UnorderedAccessView* ua_ghostdata_resource_view;
 	};
 }
 
@@ -92,6 +99,7 @@ float blendFactor[4] = { 1.f, 1.f, 1.f, 1.f };
 LensShapes::Circle unit_circle;
 LensShapes::Rectangle unit_square;
 LensShapes::Patch unit_patch;
+LensShapes::PatchData patch_data;
 std::vector<LensInterface> lens_interface;
 
 // Lens inputs
@@ -197,21 +205,21 @@ namespace angenieux {
 		{  -225.30f,    0.23f, 1.00000f, false, 0.5f, 35.0f, 412 },
 
 		{   175.09f,    8.48f, 1.69130f, false, 0.5f, 35.0f, 532 },
-		{  -203.55f,     40.f, 1.00000f, false, 0.5f, 35.0f, 632 },
+		{  -203.55f,    100.f, 1.00000f, false, 0.5f, 35.0f, 632 },
 
-		{       0.f,      5.f, 1.00000f,  true, 10.f,   5.f, 500 }
+		{       0.f,      5.f, 1.00000f,  true, 10.f,  55.f, 500 }
 	};
 }
 
-//int num_of_lens_components = (int)nikon_28_75mm::lens_components.size();
-//int aperture_id = nikon_28_75mm::aperture_id;
-
-int num_of_lens_components = (int)angenieux::lens_components.size();
-int aperture_id = angenieux::aperture_id;
+int num_of_lens_components = (int)nikon_28_75mm::lens_components.size();
+int aperture_id = nikon_28_75mm::aperture_id;
+int num_of_ghosts = 352; // 27!/2*(27-2)!
+//int num_of_lens_components = (int)angenieux::lens_components.size();
+//int aperture_id = angenieux::aperture_id;
 
 int patch_tesselation = 32;
 int num_threads = 32;
-int num_groups = patch_tesselation / num_threads;
+int num_groups = num_of_ghosts;
 int num_of_rays = patch_tesselation;
 int ghost_bounce_1 = 3;
 int ghost_bounce_2 = 1;
@@ -605,7 +613,6 @@ namespace Shaders {
 
 namespace Buffers {
 	ID3D11Buffer* globalData = nullptr;
-	ID3D11Buffer* ghostData = nullptr;
 	ID3D11Buffer* instanceUniforms = nullptr;
 	ID3D11Buffer* intersectionPoints1 = nullptr;
 	ID3D11Buffer* intersectionPoints2 = nullptr;
@@ -629,13 +636,6 @@ namespace Buffers {
 		bd.CPUAccessFlags = 0;
 		bd.ByteWidth = sizeof(GlobalData);
 		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::globalData);
-
-		ZeroMemory(&bd, sizeof(bd));
-		bd.Usage = D3D11_USAGE_DEFAULT;
-		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		bd.CPUAccessFlags = 0;
-		bd.ByteWidth = sizeof(GhostData);
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::ghostData);
 
 		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
@@ -788,10 +788,10 @@ void ParseLensComponents() {
 	lens_interface.resize(num_of_lens_components);
 
 	for (int i = num_of_lens_components - 1; i >= 0; --i) {
-		PatentFormat& entry = angenieux::lens_components[i];
+		PatentFormat& entry = nikon_28_75mm::lens_components[i];
 		total_lens_distance += entry.d;
 
-		float left_ior = i == 0 ? 1.f : angenieux::lens_components[i - 1].n;
+		float left_ior = i == 0 ? 1.f : nikon_28_75mm::lens_components[i - 1].n;
 		float right_ior = entry.n;
 
 		if (right_ior != 1.f) {
@@ -1108,9 +1108,9 @@ LensShapes::Circle CreateUnitCircle() {
 LensShapes::Patch CreateUnitPatch(int subdiv) {
 
 	float l = -1.0f;
-	float r =  1.0f;
+	float r = 1.0f;
 	float b = -1.0f;
-	float t =  1.0f;
+	float t = 1.0f;
 
 	std::vector<SimpleVertex> vertices;
 	std::vector<int> indices;
@@ -1131,7 +1131,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	for (int y = 0; y < (subdiv - 1); ++y) {
 		for (int x = 0; x < (subdiv - 1); ++x) {
 			int i = (y * (subdiv - 1) + x) * 6;
-			
+
 			int i1 = current_corner;
 			int i2 = i1 + 1;
 			int i3 = i1 + subdiv;
@@ -1144,7 +1144,7 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 			indices[i + 3] = i2;
 			indices[i + 4] = i4;
 			indices[i + 5] = i3;
-			
+
 			current_corner++;
 		}
 		current_corner++;
@@ -1155,16 +1155,6 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 
 	D3D11_BUFFER_DESC bd;
 	D3D11_SUBRESOURCE_DATA InitData;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(SimpleVertex) * (subdiv * subdiv);
-	bd.StructureByteStride = sizeof(SimpleVertex);
-	bd.CPUAccessFlags = 0;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (float*)&vertices[0];
-	d3d_device->CreateBuffer(&bd, &InitData, &patch.vs_vertices);
-
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
 	bd.ByteWidth = 3 * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1));
@@ -1209,6 +1199,141 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 	return patch;
 }
 
+LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
+
+	float l = -1.0f;
+	float r = 1.0f;
+	float b = -1.0f;
+	float t = 1.0f;
+
+	std::vector<SimpleVertex> vertices;
+	std::vector<int> indices;
+	std::vector<GhostData> ghostdata;
+
+	int bounce1 = 2;
+	int bounce2 = 1;
+	int ghost_index = 0;
+	ghostdata.resize(num_of_ghosts);
+	while (true) {
+		if (bounce1 >= (int)(lens_interface.size() - 1)) {
+			bounce2++;
+			bounce1 = bounce2 + 1;
+		}
+
+		if (bounce2 >= (int)(lens_interface.size() - 1)) {
+			break;
+		}
+
+		ghostdata[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
+		bounce1++;
+		ghost_index++;
+	}
+
+	vertices.resize(subdiv * subdiv * num_patches);
+	for (int n = 0; n < num_patches; ++n) {
+		for (int y = 0; y < subdiv; ++y) {
+			float ny = (float)y / (float)(subdiv - 1);
+			for (int x = 0; x < subdiv; ++x) {
+				float nx = (float)x / (float)(subdiv - 1);
+				float x_pos = lerp(l, r, nx);
+				float y_pos = lerp(t, b, ny);
+				vertices[n * subdiv * subdiv + y * subdiv + x] = { XMFLOAT3(x_pos, y_pos, 0.f) };
+			}
+		}
+	}
+
+	int current_corner = 0;
+	int num_indices_per_patch = (subdiv - 1) * (subdiv - 1) * 6;
+	indices.resize(num_indices_per_patch * num_patches);
+	for (int n = 0; n < num_patches; ++n) {
+		for (int y = 0; y < (subdiv - 1); ++y) {
+			for (int x = 0; x < (subdiv - 1); ++x) {
+				int i = (y * (subdiv - 1) + x) * 6 + num_indices_per_patch * n;
+
+				int i1 = current_corner;
+				int i2 = i1 + 1;
+				int i3 = i1 + subdiv;
+				int i4 = i2 + subdiv;
+
+				indices[i + 0] = i3;
+				indices[i + 1] = i1;
+				indices[i + 2] = i2;
+
+				indices[i + 3] = i2;
+				indices[i + 4] = i4;
+				indices[i + 5] = i3;
+
+				current_corner++;
+			}
+			current_corner++;
+		}
+	}
+
+	LensShapes::PatchData patch;
+	patch.subdiv = subdiv;
+
+	D3D11_BUFFER_DESC bd;
+	D3D11_SUBRESOURCE_DATA InitData;
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.ByteWidth = 3 * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1)) * num_patches;
+	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	bd.CPUAccessFlags = 0;
+	ZeroMemory(&InitData, sizeof(InitData));
+	InitData.pSysMem = (int*)&indices[0];
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.indices);
+
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.ByteWidth = sizeof(PS_INPUT) * (subdiv * subdiv) * num_patches;
+	bd.StructureByteStride = sizeof(PS_INPUT);
+	bd.CPUAccessFlags = 0;
+	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	ZeroMemory(&InitData, sizeof(InitData));
+	void* vertex_data = malloc(sizeof(PS_INPUT) * subdiv * subdiv * num_patches);
+	InitData.pSysMem = vertex_data;
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.cs_vertices);
+
+	ZeroMemory(&bd, sizeof(bd));
+	patch.cs_vertices->GetDesc(&bd);
+
+	D3D11_SHADER_RESOURCE_VIEW_DESC descView;
+	ZeroMemory(&descView, sizeof(descView));
+	descView.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+	descView.BufferEx.FirstElement = 0;
+	descView.Format = DXGI_FORMAT_UNKNOWN;
+	descView.BufferEx.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
+	ZeroMemory(&uaDescView, sizeof(uaDescView));
+	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	uaDescView.Buffer.FirstElement = 0;
+	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
+	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+	d3d_device->CreateShaderResourceView(patch.cs_vertices, &descView, &patch.vertices_resource_view);
+	d3d_device->CreateUnorderedAccessView(patch.cs_vertices, &uaDescView, &patch.ua_vertices_resource_view);
+
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	bd.CPUAccessFlags = 0;
+	bd.ByteWidth = sizeof(GhostData) * num_of_ghosts;
+	d3d_device->CreateBuffer(&bd, nullptr, &patch.ghostData);
+
+	D3D11_UNORDERED_ACCESS_VIEW_DESC uaGhostDescView;
+	ZeroMemory(&uaGhostDescView, sizeof(uaGhostDescView));
+	uaGhostDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+	uaGhostDescView.Buffer.FirstElement = 0;
+	uaGhostDescView.Format = DXGI_FORMAT_UNKNOWN;
+	uaGhostDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+	d3d_device->CreateUnorderedAccessView(patch.ghostData, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
+
+	return patch;
+}
 //--------------------------------------------------------------------------------------
 // Create Direct3D device and swap chain
 //--------------------------------------------------------------------------------------
@@ -1337,6 +1462,7 @@ HRESULT InitDevice()
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
 	unit_patch = CreateUnitPatch(patch_tesselation);
+	patch_data = CreatePatchData(patch_tesselation, num_of_ghosts);
 
 	ParseLensComponents();
 
@@ -1765,7 +1891,7 @@ void Render() {
 		d3d_context->OMSetDepthStencilState(States::depthbufferState, 0);
 		d3d_context->OMSetBlendState(States::blendStateAdd, blendFactor, sampleMask);
 
-		d3d_context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
+		d3d_context->IASetIndexBuffer(patch_data.indices, DXGI_FORMAT_R32_UINT, 0);
 		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		d3d_context->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
@@ -1778,8 +1904,14 @@ void Render() {
 
 		d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 		d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
-		d3d_context->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
-		
+		d3d_context->CSSetConstantBuffers(2, 1, &patch_data.ghostData);
+
+		d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+		d3d_context->Dispatch(1, 1, 3);
+		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
+		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+
 		int bounce1 = 2;
 		int bounce2 = 1;
 		while (true) {
@@ -1792,16 +1924,7 @@ void Render() {
 				break;
 			}
 
-			GhostData cb = { XMFLOAT4((float)bounce1, (float)bounce2, 0, 0) };
-			d3d_context->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
-
-			d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
-			d3d_context->Dispatch(num_groups, num_groups, 3);
-			d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
-			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
-
-			d3d_context->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
+			d3d_context->VSSetShaderResources(0, 1, &patch_data.vertices_resource_view);
 			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 			d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
