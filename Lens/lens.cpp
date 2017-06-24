@@ -82,7 +82,7 @@ namespace LensShapes {
 		int subdiv;
 		ID3D11Buffer* indices;
 		ID3D11Buffer* cs_vertices;
-		ID3D11Buffer* ghostData = nullptr;
+		ID3D11Buffer* ghostdata;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_ghostdata_resource_view;
@@ -1320,8 +1320,11 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
 	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	bd.CPUAccessFlags = 0;
+	bd.StructureByteStride = sizeof(GhostData);
 	bd.ByteWidth = sizeof(GhostData) * num_of_ghosts;
-	d3d_device->CreateBuffer(&bd, nullptr, &patch.ghostData);
+	ZeroMemory(&InitData, sizeof(InitData));
+	InitData.pSysMem = (int*)&ghostdata[0];
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.ghostdata);
 
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uaGhostDescView;
 	ZeroMemory(&uaGhostDescView, sizeof(uaGhostDescView));
@@ -1330,7 +1333,7 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 	uaGhostDescView.Format = DXGI_FORMAT_UNKNOWN;
 	uaGhostDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
 
-	d3d_device->CreateUnorderedAccessView(patch.ghostData, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
+	d3d_device->CreateUnorderedAccessView(patch.ghostdata, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
 
 	return patch;
 }
@@ -1457,14 +1460,14 @@ HRESULT InitDevice()
 	Buffers::InitBuffers();
 	States::InitStates();
 
+	ParseLensComponents();
+
 	FFT::InitFFTTetxtures(d3d_device, (int)aperture_resolution);
 
 	unit_circle = CreateUnitCircle();
 	unit_square = CreateUnitRectangle();
 	unit_patch = CreateUnitPatch(patch_tesselation);
 	patch_data = CreatePatchData(patch_tesselation, num_of_ghosts);
-
-	ParseLensComponents();
 
 	return S_OK;
 }
@@ -1904,32 +1907,19 @@ void Render() {
 
 		d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
 		d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
-		d3d_context->CSSetConstantBuffers(2, 1, &patch_data.ghostData);
 
-		d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
+		// Ray march
+		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
-		d3d_context->Dispatch(1, 1, 3);
+		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
+		d3d_context->Dispatch(num_of_ghosts, 1, 3);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
-		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
-		int bounce1 = 2;
-		int bounce2 = 1;
-		while (true) {
-			if (bounce1 >= (int)(lens_interface.size() - 1)) {
-				bounce2++;
-				bounce1 = bounce2 + 1;
-			}
-
-			if (bounce2 >= (int)(lens_interface.size() - 1)) {
-				break;
-			}
-
-			d3d_context->VSSetShaderResources(0, 1, &patch_data.vertices_resource_view);
-			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
-			d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
-
-			bounce1++;
-		}
+		// Draw Ghosts
+		d3d_context->VSSetShaderResources(0, 1, &patch_data.vertices_resource_view);
+		d3d_context->DrawIndexedInstanced(num_vertices_per_bundle * 3 * 2, num_of_ghosts, 0, 0, 0);
+		d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
 		// Draw Starburst
 		d3d_context->VSSetShader(Shaders::starburstVertexShader, nullptr, 0);
