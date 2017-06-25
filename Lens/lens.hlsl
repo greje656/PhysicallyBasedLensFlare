@@ -312,7 +312,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 	uint offset = PosToOffset(pos) + (gid.x * PATCH_TESSELATION * PATCH_TESSELATION);
 	uav_buffer[offset].reflectance.a = 0;
 
-	//AllMemoryBarrierWithGroupSync();
+	AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].pos = result.pos;
 	uav_buffer[offset].color = result.color;
