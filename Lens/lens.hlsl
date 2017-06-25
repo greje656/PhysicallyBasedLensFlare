@@ -210,7 +210,7 @@ uint PosToOffsetClamped(int2 pos) {
 	return x + y * PATCH_TESSELATION;
 }
 
-float GetArea(int2 pos) {
+float GetArea(int2 pos, int offset) {
 
 	// a----b----c
 	// |  A |  B |
@@ -228,15 +228,15 @@ float GetArea(int2 pos) {
 	int h = PosToOffsetClamped(pos + int2( 0,-1));
 	int i = PosToOffsetClamped(pos + int2( 1,-1));
 
-	float4 pa = uav_buffer[a].pos;
-	float4 pb = uav_buffer[b].pos;
-	float4 pc = uav_buffer[c].pos;
-	float4 pd = uav_buffer[d].pos;
-	float4 pe = uav_buffer[e].pos;
-	float4 pf = uav_buffer[f].pos;
-	float4 pg = uav_buffer[g].pos;
-	float4 ph = uav_buffer[h].pos;
-	float4 pi = uav_buffer[i].pos;
+	float4 pa = uav_buffer[a + offset].pos;
+	float4 pb = uav_buffer[b + offset].pos;
+	float4 pc = uav_buffer[c + offset].pos;
+	float4 pd = uav_buffer[d + offset].pos;
+	float4 pe = uav_buffer[e + offset].pos;
+	float4 pf = uav_buffer[f + offset].pos;
+	float4 pg = uav_buffer[g + offset].pos;
+	float4 ph = uav_buffer[h + offset].pos;
+	float4 pi = uav_buffer[i + offset].pos;
 
 	float ab = length(pa.xy - pb.xy);
 	float bc = length(pb.xy - pc.xy);
@@ -326,7 +326,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 		uav_buffer[offset].reflectance.b = result.reflectance.a;
 	}
 
-	uav_buffer[offset].color.w = GetArea(pos);
+	uav_buffer[offset].color.w = GetArea(pos, (gid.x * PATCH_TESSELATION * PATCH_TESSELATION));
 
 }
 
