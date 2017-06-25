@@ -211,11 +211,13 @@ namespace angenieux {
 	};
 }
 
-int num_of_lens_components = (int)nikon_28_75mm::lens_components.size();
-int aperture_id = nikon_28_75mm::aperture_id;
-int num_of_ghosts = 352; // 27!/2*(27-2)!
-//int num_of_lens_components = (int)angenieux::lens_components.size();
-//int aperture_id = angenieux::aperture_id;
+//int num_of_lens_components = (int)nikon_28_75mm::lens_components.size();
+//int aperture_id = nikon_28_75mm::aperture_id;
+//int num_of_ghosts = 352; // 27!/2*(27-2)!
+
+int num_of_lens_components = (int)angenieux::lens_components.size();
+int aperture_id = angenieux::aperture_id;
+int num_of_ghosts =92; // 14!/2*(14-2)!
 
 int patch_tesselation = 32;
 int num_threads = 32;
@@ -788,10 +790,10 @@ void ParseLensComponents() {
 	lens_interface.resize(num_of_lens_components);
 
 	for (int i = num_of_lens_components - 1; i >= 0; --i) {
-		PatentFormat& entry = nikon_28_75mm::lens_components[i];
+		PatentFormat& entry = angenieux::lens_components[i];
 		total_lens_distance += entry.d;
 
-		float left_ior = i == 0 ? 1.f : nikon_28_75mm::lens_components[i - 1].n;
+		float left_ior = i == 0 ? 1.f : angenieux::lens_components[i - 1].n;
 		float right_ior = entry.n;
 
 		if (right_ior != 1.f) {
