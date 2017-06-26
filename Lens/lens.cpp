@@ -56,6 +56,10 @@ struct GlobalData {
 	XMFLOAT4 aperture_opening;
 };
 
+struct CSIndirectData {
+	unsigned int x, y, z;
+};
+
 typedef XMFLOAT4 GhostData;
 
 namespace LensShapes {
@@ -82,6 +86,7 @@ namespace LensShapes {
 		int subdiv;
 		ID3D11Buffer* indices;
 		ID3D11Buffer* cs_vertices;
+		ID3D11Buffer* cs_thredcount_info;
 		ID3D11Buffer* ghostdata;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
@@ -219,7 +224,7 @@ int num_of_ghosts = 352; // 27!/2*(27-2)!
 //int aperture_id = angenieux::aperture_id;
 //int num_of_ghosts = 92; // 14!/2*(14-2)!
 
-int patch_tesselation = 64;
+int patch_tesselation = 32;
 int num_threads = 32;
 int num_groups = patch_tesselation/num_threads;
 int num_of_rays = patch_tesselation;
@@ -1340,6 +1345,18 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 
 	d3d_device->CreateUnorderedAccessView(patch.ghostdata, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
 
+	CSIndirectData thredcount_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
+	ZeroMemory(&bd, sizeof(bd));
+	bd.Usage = D3D11_USAGE_DEFAULT;
+	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+	bd.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+	bd.CPUAccessFlags = 0;
+	bd.StructureByteStride = sizeof(CSIndirectData);
+	bd.ByteWidth = sizeof(CSIndirectData);
+	ZeroMemory(&InitData, sizeof(InitData));
+	InitData.pSysMem = (int*)&thredcount_info;
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.cs_thredcount_info);
+	
 	return patch;
 }
 //--------------------------------------------------------------------------------------
@@ -1917,7 +1934,8 @@ void Render() {
 		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
-		d3d_context->Dispatch(num_of_ghosts * num_groups, num_groups, 3);
+		//d3d_context->Dispatch(num_of_ghosts * num_groups, num_groups, 3);
+		d3d_context->DispatchIndirect(patch_data.cs_thredcount_info, 0);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
