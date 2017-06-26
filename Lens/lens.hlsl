@@ -32,14 +32,16 @@ struct Ray {
 	float4 tex;
 };
 
-cbuffer GhostData : register(b2) {
+struct GhostData{
 	float bounce1;
 	float bounce2;
+	float2 padding;
 };
 
 StructuredBuffer<PSInput> vertices_buffer : register(t0);
 RWStructuredBuffer<PSInput> uav_buffer : register(u0);
 RWStructuredBuffer<LensInterface> lens_interface : register(u1);
+RWStructuredBuffer<GhostData> ghostdata_buffer : register(u2);
 
 Intersection TestFlat(Ray r, LensInterface F) {
 	Intersection i;
@@ -208,7 +210,7 @@ uint PosToOffsetClamped(int2 pos) {
 	return x + y * PATCH_TESSELATION;
 }
 
-float GetArea(int2 pos) {
+float GetArea(int2 pos, int offset) {
 
 	// a----b----c
 	// |  A |  B |
@@ -226,15 +228,15 @@ float GetArea(int2 pos) {
 	int h = PosToOffsetClamped(pos + int2( 0,-1));
 	int i = PosToOffsetClamped(pos + int2( 1,-1));
 
-	float4 pa = uav_buffer[a].pos;
-	float4 pb = uav_buffer[b].pos;
-	float4 pc = uav_buffer[c].pos;
-	float4 pd = uav_buffer[d].pos;
-	float4 pe = uav_buffer[e].pos;
-	float4 pf = uav_buffer[f].pos;
-	float4 pg = uav_buffer[g].pos;
-	float4 ph = uav_buffer[h].pos;
-	float4 pi = uav_buffer[i].pos;
+	float4 pa = uav_buffer[a + offset].pos;
+	float4 pb = uav_buffer[b + offset].pos;
+	float4 pc = uav_buffer[c + offset].pos;
+	float4 pd = uav_buffer[d + offset].pos;
+	float4 pe = uav_buffer[e + offset].pos;
+	float4 pf = uav_buffer[f + offset].pos;
+	float4 pg = uav_buffer[g + offset].pos;
+	float4 ph = uav_buffer[h + offset].pos;
+	float4 pi = uav_buffer[i + offset].pos;
 
 	float ab = length(pa.xy - pb.xy);
 	float bc = length(pb.xy - pc.xy);
@@ -273,7 +275,7 @@ float GetArea(int2 pos) {
 	return isnan(area) ? 0.f : area;
 }
 
-PSInput getTraceResult(float2 ndc, float wavelength){
+PSInput getTraceResult(float2 ndc, float wavelength, int2 bounces){
 	float3 starting_pos = float3(ndc * spread, 1000.f);
 	
 	// Project all starting points in the entry lens
@@ -282,7 +284,7 @@ PSInput getTraceResult(float2 ndc, float wavelength){
 	starting_pos = i.pos - light_dir.xyz;
 
 	Ray r = { starting_pos, light_dir.xyz, float4(0,0,0,1) };
-	Ray g = Trace(r, wavelength, int2(bounce1, bounce2));
+	Ray g = Trace(r, wavelength, bounces);
 
 	PSInput result;
 	result.pos = float4(g.pos.xyz, 1.f);
@@ -297,19 +299,24 @@ PSInput getTraceResult(float2 ndc, float wavelength){
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_GroupIndex) {
-	int2 pos = gid.xy * NUM_THREADS + gtid.xy;
+
+	int ghostid = gid.x / NUM_GROUPS;
+	int data_offset = ghostid * PATCH_TESSELATION * PATCH_TESSELATION;
+	
+	int2 pos = gtid.xy + (gid.xy % NUM_GROUPS) * NUM_THREADS;
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
 	float color_spectrum[3] = {650.f, 510.f, 475.f};
 	float wavelength = color_spectrum[gid.z] * NANO_METER;
 
-	PSInput result = getTraceResult(ndc, wavelength);
+	int2 bounces = int2(ghostdata_buffer[ghostid].bounce1, ghostdata_buffer[ghostid].bounce2);
+	PSInput result = getTraceResult(ndc, wavelength, bounces);
 	
-	uint offset = PosToOffset(pos);
+	uint offset = PosToOffset(pos) + data_offset;
 	uav_buffer[offset].reflectance.a = 0;
 
-	AllMemoryBarrierWithGroupSync();
+	//AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].pos = result.pos;
 	uav_buffer[offset].color = result.color;
@@ -323,14 +330,14 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 		uav_buffer[offset].reflectance.b = result.reflectance.a;
 	}
 
-	uav_buffer[offset].color.w = GetArea(pos);
+	uav_buffer[offset].color.w = GetArea(pos, data_offset);
 
 }
 
 // Vertex Shader
 // ----------------------------------------------------------------------------------
-PSInput VS(uint id : SV_VertexID) {
-	PSInput vertex  = vertices_buffer[id];
+PSInput VS(uint id : SV_VertexID, uint instance_id : SV_InstanceID) {
+	PSInput vertex  = vertices_buffer[id + instance_id * PATCH_TESSELATION * PATCH_TESSELATION];
 	
 	float ratio = backbuffer_size.x / backbuffer_size.y;
 	float scale = 1.f / plate_size;
