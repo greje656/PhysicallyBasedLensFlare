@@ -86,7 +86,7 @@ namespace LensShapes {
 		int subdiv;
 		ID3D11Buffer* indices;
 		ID3D11Buffer* cs_vertices;
-		ID3D11Buffer* cs_thredcount_info;
+		ID3D11Buffer* cs_group_count_info;
 		ID3D11Buffer* ghostdata;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
@@ -1345,7 +1345,7 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 
 	d3d_device->CreateUnorderedAccessView(patch.ghostdata, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
 
-	CSIndirectData thredcount_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
+	CSIndirectData group_count_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
 	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
@@ -1354,8 +1354,8 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 	bd.StructureByteStride = sizeof(CSIndirectData);
 	bd.ByteWidth = sizeof(CSIndirectData);
 	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (int*)&thredcount_info;
-	d3d_device->CreateBuffer(&bd, &InitData, &patch.cs_thredcount_info);
+	InitData.pSysMem = (int*)&group_count_info;
+	d3d_device->CreateBuffer(&bd, &InitData, &patch.cs_group_count_info);
 	
 	return patch;
 }
@@ -1906,6 +1906,7 @@ void Render() {
 	}
 
 	#if defined(DRAWLENSFLARE)
+		// Setup pipeline
 		d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
 
 		d3d_context->RSSetState(States::rasterStateNoCull);
@@ -1934,8 +1935,7 @@ void Render() {
 		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
-		//d3d_context->Dispatch(num_of_ghosts * num_groups, num_groups, 3);
-		d3d_context->DispatchIndirect(patch_data.cs_thredcount_info, 0);
+		d3d_context->DispatchIndirect(patch_data.cs_group_count_info, 0);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
@@ -2048,9 +2048,7 @@ void Render() {
 				vec3 d1 = vec3(0.0f, 0.0f, -1.f);
 				Ray r1 = { a1, d1 };
 				Intersection i1 = testSPHERE(r1, lens_interface[0]);
-
 				vec3 a2 = i1.pos - dir;
-
 				Ray r = { a2, dir };
 
 				Trace(r, 1.f, lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
