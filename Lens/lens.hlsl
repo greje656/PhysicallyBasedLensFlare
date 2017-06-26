@@ -299,20 +299,24 @@ PSInput getTraceResult(float2 ndc, float wavelength, int2 bounces){
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_GroupIndex) {
-	int2 pos = gtid.xy;
+
+	int ghostid = gid.x / NUM_GROUPS;
+	int data_offset = ghostid * PATCH_TESSELATION * PATCH_TESSELATION;
+	
+	int2 pos = gtid.xy + (gid.xy % NUM_GROUPS) * NUM_THREADS;
 	float2 uv = pos / float(PATCH_TESSELATION - 1);
 	float2 ndc = (uv - 0.5f) * 2.f;
 
 	float color_spectrum[3] = {650.f, 510.f, 475.f};
 	float wavelength = color_spectrum[gid.z] * NANO_METER;
 
-	int2 bounces = int2(ghostdata_buffer[gid.x].bounce1, ghostdata_buffer[gid.x].bounce2);
+	int2 bounces = int2(ghostdata_buffer[ghostid].bounce1, ghostdata_buffer[ghostid].bounce2);
 	PSInput result = getTraceResult(ndc, wavelength, bounces);
 	
-	uint offset = PosToOffset(pos) + (gid.x * PATCH_TESSELATION * PATCH_TESSELATION);
+	uint offset = PosToOffset(pos) + data_offset;
 	uav_buffer[offset].reflectance.a = 0;
 
-	AllMemoryBarrierWithGroupSync();
+	//AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].pos = result.pos;
 	uav_buffer[offset].color = result.color;
@@ -326,7 +330,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 		uav_buffer[offset].reflectance.b = result.reflectance.a;
 	}
 
-	uav_buffer[offset].color.w = GetArea(pos, (gid.x * PATCH_TESSELATION * PATCH_TESSELATION));
+	uav_buffer[offset].color.w = GetArea(pos, data_offset);
 
 }
 

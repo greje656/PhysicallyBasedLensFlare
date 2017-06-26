@@ -219,9 +219,9 @@ int num_of_ghosts = 352; // 27!/2*(27-2)!
 //int aperture_id = angenieux::aperture_id;
 //int num_of_ghosts = 92; // 14!/2*(14-2)!
 
-int patch_tesselation = 32;
+int patch_tesselation = 64;
 int num_threads = 32;
-int num_groups = num_of_ghosts;
+int num_groups = patch_tesselation/num_threads;
 int num_of_rays = patch_tesselation;
 int ghost_bounce_1 = 3;
 int ghost_bounce_2 = 1;
@@ -535,11 +535,13 @@ namespace Shaders {
 		blob->Release();
 
 		std::string aperture_id_string = std::to_string(aperture_id);
+		std::string num_groups_string = std::to_string(num_groups);
 		std::string num_threads_string = std::to_string(num_threads);
 		std::string patch_tesselation_string = std::to_string(patch_tesselation);
 
 		D3D_SHADER_MACRO lens_defines[] = {
 			"AP_IDX", aperture_id_string.c_str(),
+			"NUM_GROUPS", num_groups_string.c_str(),
 			"NUM_THREADS", num_threads_string.c_str(),
 			"PATCH_TESSELATION", patch_tesselation_string.c_str(), 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob, lens_defines);
@@ -551,12 +553,12 @@ namespace Shaders {
 		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();	
 
-		D3D_SHADER_MACRO debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_VALUES", "", 0, 0 };
+		D3D_SHADER_MACRO debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], lens_defines[3], "DEBUG_VALUES", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
 		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
 		blob->Release();
 
-		D3D_SHADER_MACRO wireframe_debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], "DEBUG_WIREFRAME", "", 0, 0 };
+		D3D_SHADER_MACRO wireframe_debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], lens_defines[3], "DEBUG_WIREFRAME", "", 0, 0 };
 		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
 		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
 		blob->Release();
@@ -1915,7 +1917,7 @@ void Render() {
 		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
-		d3d_context->Dispatch(num_of_ghosts, 1, 3);
+		d3d_context->Dispatch(num_of_ghosts * num_groups, num_groups, 3);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
