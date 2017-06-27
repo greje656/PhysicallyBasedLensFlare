@@ -121,18 +121,21 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 
 	float d = length(uv);
 	// -ve violet, +v reds
-	float scale = 0.5f;// + nvalue * 0.5;
+	float scale1 =  0.5f;// + nvalue * 0.5;
+	float scale2 = -0.5f;// + nvalue * 0.5;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
-		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
-		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
+		float2 scaled_uv1 = uv * lerp(1.0 + scale1, 1.0, n);
+		float2 scaled_uv2 = uv * lerp(1.0 + scale2, 1.0, n);
+		bool clamped1 = scaled_uv1.x < -0.5 || scaled_uv1.x > 0.5 || scaled_uv1.y < -0.5 || scaled_uv1.y > 0.5;
+		bool clamped2 = scaled_uv2.x < -0.5 || scaled_uv2.x > 0.5 || scaled_uv2.y < -0.5 || scaled_uv2.y > 0.5;
 
-		float r1 = input_texture1.Sample(LinearSampler, scaled_uv).r * !clamped;
-		float i1 = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
+		float r1 = input_texture1.Sample(LinearSampler, scaled_uv1).r * !clamped1;
+		float i1 = input_texture2.Sample(LinearSampler, scaled_uv1).r * !clamped1;
 		float2 p1 = float2(r1, i1);
 
-		float r2 = input_texture1.Sample(LinearSampler, scaled_uv).b * !clamped;
-		float i2 = input_texture2.Sample(LinearSampler, scaled_uv).b * !clamped;
+		float r2 = input_texture1.Sample(LinearSampler, scaled_uv2).b * !clamped2;
+		float i2 = input_texture2.Sample(LinearSampler, scaled_uv2).b * !clamped2;
 		float2 p2 = float2(r2, i2);
 
 		float v1 = pow(length(p1), 2.f) * 0.00001 * lerp(1.0, 50, d);
