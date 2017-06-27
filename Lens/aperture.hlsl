@@ -32,13 +32,13 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	// fft aperture shape
 	float signed_distance = 0.f;
 	for(int i = 0; i < num_of_blades; ++i) {
-		float angle = aperture_opening + (i/float(num_of_blades)) * TWOPI;
+		float angle = (i/float(num_of_blades)) * TWOPI;
 		float2 axis = float2(cos(angle), sin(angle));
-		signed_distance = smax(signed_distance, dot(axis, ndc), 0.1);
+		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
 
-	signed_distance += s1;
-	float aperture_fft = fade_aperture_edge(0.7, 0.02, signed_distance);
+	//signed_distance += s1;
+	float aperture_fft = fade_aperture_edge(0.7, 0.00001, signed_distance);
 
 	// camera aperture shape
 	signed_distance = 0.f;
@@ -67,8 +67,8 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 
 	{ // Dust
 		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		aperture_fft *= saturate(dust + 0.25);
-		aperture_mask *= saturate(dust + 0.9);
+		//aperture_fft *= saturate(dust + 0.25);
+		//aperture_mask *= saturate(dust + 0.9);
 	}
 
 	float3 rgb = float3(aperture_fft, aperture_mask, 0);

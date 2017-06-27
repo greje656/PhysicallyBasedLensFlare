@@ -1935,13 +1935,13 @@ void Render() {
 		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
-		d3d_context->DispatchIndirect(patch_data.cs_group_count_info, 0);
+		//d3d_context->DispatchIndirect(patch_data.cs_group_count_info, 0);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
 		// Draw Ghosts
 		d3d_context->VSSetShaderResources(0, 1, &patch_data.vertices_resource_view);
-		d3d_context->DrawIndexedInstanced(num_vertices_per_bundle * 3 * 2, num_of_ghosts, 0, 0, 0);
+		//d3d_context->DrawIndexedInstanced(num_vertices_per_bundle * 3 * 2, num_of_ghosts, 0, 0, 0);
 		d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
 		// Draw Starburst
