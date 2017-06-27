@@ -82,14 +82,14 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 	float3 l0 = float3(0, 0, 0);
 	float3 c = IntersectPlane(n, p0, l0, light_dir);
 
-	float intensity = 1.f - saturate(abs(light_dir.x * 12.f));
+	float intensity = 1.f - saturate(abs(light_dir.x * 10.f));
 
 	float oo1 = 1 - (sin(time * 5) + 1) * 0.025;
 	float oo2 = 1 - (sin(time * 1) + 1) * 0.0125;
 	float oo = oo1 * oo2;
 	intensity *= oo;
 
-	float opening = 3;//saturate(aperture_opening/10.f);
+	float opening = saturate(aperture_opening/10.f);
 	intensity *= opening * 0.5;
 
 	result.pos = float4(pos.xy * (0.1  + opening), 0.f, 1.f);
@@ -103,12 +103,11 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 float4 PSStarburst(StarbustInput input) : SV_Target {
 
 	float2 uv = input.uv.xy;
-	float intensity_mask = (1.f - saturate(length(uv - 0.5) * 2)) * 5.f;
-	float intensity = (input.uv.z) * intensity_mask;
+	float intensity_mask = 1;//(1.f - saturate(length(uv - 0.5) * 2)) * 5.f;
+	float intensity = (input.uv.z) * intensity_mask * lerp(1,2, length(uv-0.5));
 	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
 	starburst *= TemperatureToColor(INCOMING_LIGHT_TEMP);
 
-	starburst += 0.05;
 	return float4(starburst, 1.f);
 }
 
@@ -120,23 +119,30 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 	float3 result = 0;
 	int num_steps = 256;
 
-	float lll = length(uv);
+	float d = length(uv);
 	// -ve violet, +v reds
-	float scale = 0;//-0.65f;// + nvalue * 0.1;
+	float scale = 0.5f;// + nvalue * 0.5;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
 		float2 scaled_uv = uv * lerp(1.0 + scale, 1.0, n);
 		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
 
-		float r = input_texture1.Sample(LinearSampler, scaled_uv).r * !clamped;
-		float i = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
-		float2 p = float2(r, i);
+		float r1 = input_texture1.Sample(LinearSampler, scaled_uv).r * !clamped;
+		float i1 = input_texture2.Sample(LinearSampler, scaled_uv).r * !clamped;
+		float2 p1 = float2(r1, i1);
 
-		float v = pow(length(p), 2.f) * 0.00001 * lerp(0.1, 1, saturate(lll));
-		float lambda = lerp(350.f, 600.f, n);
+		float r2 = input_texture1.Sample(LinearSampler, scaled_uv).b * !clamped;
+		float i2 = input_texture2.Sample(LinearSampler, scaled_uv).b * !clamped;
+		float2 p2 = float2(r2, i2);
+
+		float v1 = pow(length(p1), 2.f) * 0.00001 * lerp(1.0, 50, d);
+		float v2 = pow(length(p2), 2.f) * 0.00001;
+
+		float lambda = lerp(380.f, 700.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
-		rgb = lerp(rgb, rgb, n);
-		result += v * rgb;
+		rgb = lerp(1.f, rgb, 0.75f);
+
+		result += (v1 + v2 * rgb * 0.25f);
 	}
 
 	result /= (float)num_steps;
@@ -152,16 +158,19 @@ float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
 	for(int i = 0; i <= num_steps; ++i){
 		float n = (float)i/(float)num_steps;
 		float a = n * TWOPI * 2;
-		float2 spiral = float2(cos(a), sin(a)) * n * 0.01;
+		float2 spiral = float2(cos(a), sin(a)) * n * 0.002;
 		float2 jittered_uv = uv + spiral;
-		float2 scaled_uv = jittered_uv;
 
-		float2 rotated_uv = Rotate(scaled_uv, n * 0.05);
-		scaled_uv = rotated_uv;
-		bool clamped = scaled_uv.x < -0.5 || scaled_uv.x > 0.5 || scaled_uv.y < -0.5 || scaled_uv.y > 0.5;
+		float2 rotated_uv = Rotate(jittered_uv, n * 0.05);
+		bool clamped = rotated_uv.x < -0.5 || rotated_uv.x > 0.5 || rotated_uv.y < -0.5 || rotated_uv.y > 0.5;
 
-		float3 rgb = input_texture1.Sample(LinearSampler, uv + 0.5).rgb * !clamped;
-		result += rgb;
+		float3 v = input_texture1.Sample(LinearSampler, rotated_uv + 0.5).rgb * !clamped;
+
+		float lambda = lerp(380.f, 700.f, (i % 80)/80.f);
+		float3 rgb = wl2rgbTannenbaum(lambda);
+		rgb = lerp(rgb, 1.f, 0.5f);
+
+		result += v * rgb;
 	}
 
 	result /= (float)num_steps;

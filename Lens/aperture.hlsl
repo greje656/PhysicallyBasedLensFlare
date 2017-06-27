@@ -65,13 +65,14 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 		aperture_mask = aperture_mask + rings * 0.125;
 	}
 
+	float dust = 0.f;
 	{ // Dust
-		float dust = input_texture1.Sample(LinearSampler, uv).r;
-		//aperture_fft *= saturate(dust + 0.25);
+		dust = input_texture1.Sample(LinearSampler, uv).r;
+		//aperture_fft *= saturate(dust);
 		//aperture_mask *= saturate(dust + 0.9);
 	}
 
-	float3 rgb = float3(aperture_fft, aperture_mask, 0);
+	float3 rgb = float3(aperture_fft, aperture_mask, dust);
 
 	return float4(rgb, 1);
 }
