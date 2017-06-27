@@ -32,7 +32,7 @@ float4 PSAperture(float4 pos : SV_POSITION) : SV_Target {
 	// fft aperture shape
 	float signed_distance = 0.f;
 	for(int i = 0; i < num_of_blades; ++i) {
-		float angle = (i/float(num_of_blades)) * TWOPI;
+		float angle = aperture_opening  + (i/float(num_of_blades)) * TWOPI;
 		float2 axis = float2(cos(angle), sin(angle));
 		signed_distance = max(signed_distance, dot(axis, ndc));
 	}
