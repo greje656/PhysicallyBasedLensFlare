@@ -72,30 +72,36 @@ float2 Rotate(float2 p, float a) {
 	return float2(x1, y1);
 }
 
-StarbustInput VSStarburst(float4 pos : POSITION ) {
+StarbustInput VSStarburst(float4 pos : POSITION, uint id : SV_VertexID) {
 	StarbustInput result;
 
 	float ratio = backbuffer_size.x / backbuffer_size.y;
 
-	float3 n = float3(0, 0, -1);
+	float3 n  = float3(0, 0, -1);
 	float3 p0 = float3(0, 0, 20);
-	float3 l0 = float3(0, 0, 0);
-	float3 c = IntersectPlane(n, p0, l0, light_dir);
+	float3 l0 = float3(0, 0,  0);
+	float3 c  = IntersectPlane(n, p0, l0, light_dir);
 
-	float intensity = 1.f - saturate(abs(light_dir.x * 10.f));
+	float intensity = 1.f - saturate(abs(light_dir.x * 8.f));
 
-	float oo1 = 1 - (sin(time * 5) + 1) * 0.025;
-	float oo2 = 1 - (sin(time * 1) + 1) * 0.0125;
+	float oo1 = 1.f - (sin(time * 5.f) + 1.f) * 0.025f;
+	float oo2 = 1.f - (sin(time * 1.f) + 1.f) * 0.0125f;
 	float oo = oo1 * oo2;
 	intensity *= oo;
 
-	float opening = 0.1 + saturate(aperture_opening/10.f);
-	intensity *= opening * 0.5;
+	float opening = 0.2f + saturate(aperture_opening/10.f);
+	result.pos = float4(pos.xy * opening, 0.f, 1.f);
+	result.pos.xy += c.xy * float2(0.5f, 1.f);
 
-	result.pos = float4(pos.xy * (0.1  + opening), 0.f, 1.f);
-	result.pos.xy += c.xy * float2(0.5, 1);
+	//bool c1 = (id == 0) || (id == 3);
+	//bool c4 = (id == 4);
+	//float distance_to_edge = (light_dir.x * 3.f * opening);
+	//if(c1)
+	//	result.pos.x += clamp(distance_to_edge, -20, 0);
+	//else if(c4)
+	//	result.pos.x += clamp(distance_to_edge, 0, 20);
 
-	result.uv.xy = (pos.xy * float2(1, 0.5) + float2(1.f, 1.f)) * 0.5;
+	result.uv.xy = (pos.xy * float2(1.f, 0.5f) + float2(1.f, 1.f)) * 0.5f;
 	result.uv.z = intensity;
 	return result;
 }
@@ -103,8 +109,7 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 float4 PSStarburst(StarbustInput input) : SV_Target {
 
 	float2 uv = input.uv.xy;
-	float intensity_mask = 1;//(1.f - saturate(length(uv - 0.5) * 2)) * 5.f;
-	float intensity = (input.uv.z) * intensity_mask * lerp(1,2, length(uv-0.5));
+	float intensity = (input.uv.z);// * lerp(1.f, 2.f, length(uv-0.5));
 	float3 starburst = input_texture1.Sample(LinearSampler, input.uv.xy).rgb * intensity;
 	starburst *= TemperatureToColor(INCOMING_LIGHT_TEMP);
 
@@ -116,15 +121,17 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 	float2 uv = pos.xy / starburst_resolution - 0.5;
 	float nvalue = n1rand(uv);
 
-	float3 result = 0;
+	float3 result = 0.f;
 	int num_steps = 256;
 
-	float d = length(uv);
+	float d = length(uv) * 2;
+	
 	// -ve violet, +v reds
 	float scale1 =  0.5f;// + nvalue * 0.5;
-	float scale2 = -0.5f;// + nvalue * 0.5;
+	float scale2 = -0.75f;// + nvalue * 0.5;
 	for(int i = 0; i <= num_steps; ++i) {
 		float n = (float)i/(float)num_steps;
+		
 		float2 scaled_uv1 = uv * lerp(1.0 + scale1, 1.0, n);
 		float2 scaled_uv2 = uv * lerp(1.0 + scale2, 1.0, n);
 		bool clamped1 = scaled_uv1.x < -0.5 || scaled_uv1.x > 0.5 || scaled_uv1.y < -0.5 || scaled_uv1.y > 0.5;
@@ -138,8 +145,8 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 		float i2 = input_texture2.Sample(LinearSampler, scaled_uv2).b * !clamped2;
 		float2 p2 = float2(r2, i2);
 
-		float v1 = pow(length(p1), 2.f) * 0.00001 * lerp(1.0, 50, d);
-		float v2 = pow(length(p2), 2.f) * 0.00001;
+		float v1 = pow(length(p1), 2.f) * 0.00001 * lerp(1.0, 25, d);
+		float v2 = pow(length(p2), 2.f) * 0.00001 * lerp(0.5,  0, d);
 
 		float lambda = lerp(380.f, 700.f, n);
 		float3 rgb = wl2rgbTannenbaum(lambda);
@@ -157,7 +164,7 @@ float4 PSStarburstFilter(float4 pos : SV_POSITION ) : SV_Target {
 
 	float3 result = 0;
 	int num_steps = 256;
-	
+		
 	for(int i = 0; i <= num_steps; ++i){
 		float n = (float)i/(float)num_steps;
 		float a = n * TWOPI * 2;
