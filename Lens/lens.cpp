@@ -87,10 +87,8 @@ namespace LensShapes {
 		ID3D11Buffer* indices;
 		ID3D11Buffer* cs_vertices;
 		ID3D11Buffer* cs_group_count_info;
-		ID3D11Buffer* ghostdata;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
-		ID3D11UnorderedAccessView* ua_ghostdata_resource_view;
 	};
 }
 
@@ -350,7 +348,6 @@ D3D_FEATURE_LEVEL              d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
 namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
 	ID3D11ShaderResourceView*  null_sr_view[1] = { NULL };
-	ID3D11UnorderedAccessView* lensInterface_view;
 	ID3D11DepthStencilView*    depthstencil_view = nullptr;
 	ID3D11RenderTargetView*    backbuffer_rt_view = nullptr;
 
@@ -622,12 +619,16 @@ namespace Shaders {
 }
 
 namespace Buffers {
-	ID3D11Buffer* globalData = nullptr;
+	ID3D11Buffer* ghostdata = nullptr;
+	ID3D11Buffer* globaldata = nullptr;
 	ID3D11Buffer* instanceUniforms = nullptr;
 	ID3D11Buffer* intersectionPoints1 = nullptr;
 	ID3D11Buffer* intersectionPoints2 = nullptr;
 	ID3D11Buffer* intersectionPoints3 = nullptr;
 	ID3D11Buffer* lensInterface = nullptr;
+
+	ID3D11UnorderedAccessView* ghostdata_view;
+	ID3D11UnorderedAccessView* lensInterface_view;
 
 	void InitBuffers() {
 		HRESULT hr;
@@ -645,7 +646,7 @@ namespace Buffers {
 		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		bd.CPUAccessFlags = 0;
 		bd.ByteWidth = sizeof(GlobalData);
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::globalData);
+		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::globaldata);
 
 		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
@@ -656,6 +657,48 @@ namespace Buffers {
 
 		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_3;
 		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints3);
+
+		std::vector<GhostData> gd;
+		int bounce1 = 2;
+		int bounce2 = 1;
+		int ghost_index = 0;
+		gd.resize(num_of_ghosts);
+		while (true) {
+			if (bounce1 >= (int)(lens_interface.size() - 1)) {
+				bounce2++;
+				bounce1 = bounce2 + 1;
+			}
+
+			if (bounce2 >= (int)(lens_interface.size() - 1)) {
+				break;
+			}
+
+			gd[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
+			bounce1++;
+			ghost_index++;
+		}
+
+		ZeroMemory(&bd, sizeof(bd));
+		bd.Usage = D3D11_USAGE_DEFAULT;
+		bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+		bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+		bd.CPUAccessFlags = 0;
+		bd.StructureByteStride = sizeof(GhostData);
+		bd.ByteWidth = sizeof(GhostData) * num_of_ghosts;
+		D3D11_SUBRESOURCE_DATA InitData;
+		ZeroMemory(&InitData, sizeof(InitData));
+		InitData.pSysMem = (int*)&gd[0];
+		d3d_device->CreateBuffer(&bd, &InitData, &Buffers::ghostdata);
+
+		D3D11_UNORDERED_ACCESS_VIEW_DESC uaGhostDescView;
+		ZeroMemory(&uaGhostDescView, sizeof(uaGhostDescView));
+		uaGhostDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		uaGhostDescView.Buffer.FirstElement = 0;
+		uaGhostDescView.Format = DXGI_FORMAT_UNKNOWN;
+		uaGhostDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
+
+		d3d_device->CreateUnorderedAccessView(Buffers::ghostdata, &uaGhostDescView, &Buffers::ghostdata_view);
+
 	}
 }
 
@@ -781,15 +824,9 @@ namespace States {
 }
 
 void UpdateLensComponents() {
-	D3D11_BOX box = { 0 };
-	box.left = aperture_id * sizeof(LensInterface);
-	box.right = (aperture_id + 1) * sizeof(LensInterface);
-	box.back = 1;
-	box.bottom = 1;
-
 	lens_interface[aperture_id].sa = aperture_opening;
 	LensInterface aperture_component = lens_interface[aperture_id];
-
+	D3D11_BOX box = { aperture_id * sizeof(LensInterface), 0, 0, (aperture_id + 1) * sizeof(LensInterface), 1, 1 };
 	d3d_context->UpdateSubresource(Buffers::lensInterface, 0, &box, &aperture_component, 0, 0);
 }
 
@@ -837,7 +874,7 @@ void ParseLensComponents() {
 	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
 	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
 
-	hr = d3d_device->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Textures::lensInterface_view);
+	hr = d3d_device->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Buffers::lensInterface_view);
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -1212,32 +1249,12 @@ LensShapes::Patch CreateUnitPatch(int subdiv) {
 LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 
 	float l = -1.0f;
-	float r = 1.0f;
+	float r =  1.0f;
 	float b = -1.0f;
-	float t = 1.0f;
+	float t =  1.0f;
 
 	std::vector<SimpleVertex> vertices;
 	std::vector<int> indices;
-	std::vector<GhostData> ghostdata;
-
-	int bounce1 = 2;
-	int bounce2 = 1;
-	int ghost_index = 0;
-	ghostdata.resize(num_of_ghosts);
-	while (true) {
-		if (bounce1 >= (int)(lens_interface.size() - 1)) {
-			bounce2++;
-			bounce1 = bounce2 + 1;
-		}
-
-		if (bounce2 >= (int)(lens_interface.size() - 1)) {
-			break;
-		}
-
-		ghostdata[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
-		bounce1++;
-		ghost_index++;
-	}
 
 	vertices.resize(subdiv * subdiv * num_patches);
 	for (int n = 0; n < num_patches; ++n) {
@@ -1324,27 +1341,7 @@ LensShapes::PatchData CreatePatchData(int subdiv, int num_patches) {
 
 	d3d_device->CreateShaderResourceView(patch.cs_vertices, &descView, &patch.vertices_resource_view);
 	d3d_device->CreateUnorderedAccessView(patch.cs_vertices, &uaDescView, &patch.ua_vertices_resource_view);
-
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	bd.CPUAccessFlags = 0;
-	bd.StructureByteStride = sizeof(GhostData);
-	bd.ByteWidth = sizeof(GhostData) * num_of_ghosts;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (int*)&ghostdata[0];
-	d3d_device->CreateBuffer(&bd, &InitData, &patch.ghostdata);
-
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uaGhostDescView;
-	ZeroMemory(&uaGhostDescView, sizeof(uaGhostDescView));
-	uaGhostDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-	uaGhostDescView.Buffer.FirstElement = 0;
-	uaGhostDescView.Format = DXGI_FORMAT_UNKNOWN;
-	uaGhostDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-	d3d_device->CreateUnorderedAccessView(patch.ghostdata, &uaGhostDescView, &patch.ua_ghostdata_resource_view);
-
+	
 	CSIndirectData group_count_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
 	ZeroMemory(&bd, sizeof(bd));
 	bd.Usage = D3D11_USAGE_DEFAULT;
@@ -1476,13 +1473,13 @@ HRESULT InitDevice()
 	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
 	dxgiFactory->Release();
 
+	ParseLensComponents();
+
 	Textures::InitTextures();
 	Textures::InitializeSamplers();
 	Shaders::InitShaders();
 	Buffers::InitBuffers();
 	States::InitStates();
-
-	ParseLensComponents();
 
 	FFT::InitFFTTetxtures(d3d_device, (int)aperture_resolution);
 
@@ -1817,12 +1814,16 @@ void UpdateGlobals() {
 	#if defined(DRAWLENSFLARE)
 		vec3 dir = normalize(vec3(-x_dir, y_dir, -1.f));
 	#else
-		vec3 dir = normalize(vec3(0, y_dir, -1.f));
+		vec3 dir = normalize(vec3(draw2d ? 0 : -x_dir, y_dir, -1.f));
+
+		D3D11_BOX box = { 0, 0, 0, sizeof(GhostData), 1, 1 };
+		GhostData updated_ghostdata = { (float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0 };
+		d3d_context->UpdateSubresource(Buffers::ghostdata, 0, &box, &updated_ghostdata, 0, 0);
 	#endif
-	
+
 	direction = XMFLOAT3(dir.x, dir.y, dir.z);
 
-	GlobalData cb = {
+	GlobalData updated_globaldata = {
 		time,
 		rays_spread,
 		lens_interface[lens_interface.size() - 1].sa,
@@ -1836,7 +1837,7 @@ void UpdateGlobals() {
 		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution, 0.f)
 	};
 
-	d3d_context->UpdateSubresource(Buffers::globalData, 0, nullptr, &cb, 0, 0);
+	d3d_context->UpdateSubresource(Buffers::globaldata, 0, nullptr, &updated_globaldata, 0, 0);
 }
 
 void DrawAperture() {
@@ -1847,7 +1848,7 @@ void DrawAperture() {
 
 	d3d_context->VSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
 	d3d_context->PSSetConstantBuffers(0, 1, &Buffers::instanceUniforms);
-	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globaldata);
 
 	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::aperture_rt_view, Textures::aperture_depthbuffer_view);
 
@@ -1876,14 +1877,14 @@ void DrawStarBurst() {
 	d3d_context->PSSetShader(Shaders::starburstFromFFTPixelShader, nullptr, 0);
 	d3d_context->PSSetShaderResources(1, 2, FFT::mTextureSRV);
 	d3d_context->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globaldata);
 	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::starburst_rt_view, Textures::starburst_depth_buffer_view);
 	d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	d3d_context->PSSetShader(Shaders::starburstFilterPixelShader, nullptr, 0);
 	d3d_context->PSSetShaderResources(1, 1, &Textures::starburst_sr_view);
 	d3d_context->PSSetSamplers(0, 1, &Textures::linear_wrap_sampler);
-	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+	d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globaldata);
 	DrawFullscreenQuad(d3d_context, unit_square, fill_color1, Textures::starburst_filtered_rt_view, Textures::starburst_depth_buffer_view);
 	d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
@@ -1921,20 +1922,20 @@ void Render() {
 		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		d3d_context->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
-		d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globaldata);
 
 		d3d_context->PSSetShader(Shaders::flarePixelShader, nullptr, 0);
-		d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globaldata);
 		d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 		d3d_context->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
 
 		d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
-		d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
+		d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globaldata);
 
 		// Ray march
 		d3d_context->CSSetUnorderedAccessViews(0, 1, &patch_data.ua_vertices_resource_view, nullptr);
-		d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
-		d3d_context->CSSetUnorderedAccessViews(2, 1, &patch_data.ua_ghostdata_resource_view, nullptr);
+		d3d_context->CSSetUnorderedAccessViews(1, 1, &Buffers::lensInterface_view, nullptr);
+		d3d_context->CSSetUnorderedAccessViews(2, 1, &Buffers::ghostdata_view, nullptr);
 		d3d_context->DispatchIndirect(patch_data.cs_group_count_info, 0);
 		d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
@@ -1979,7 +1980,6 @@ void Render() {
 	#else
 		if(!draw2d) {
 			GhostData cb = { XMFLOAT4((float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0) };
-			d3d_context->UpdateSubresource(Buffers::ghostData, 0, nullptr, &cb, 0, 0);
 
 			d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
 			d3d_context->IASetIndexBuffer(unit_patch.indices, DXGI_FORMAT_R32_UINT, 0);
@@ -1992,21 +1992,23 @@ void Render() {
 			d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 			d3d_context->CSSetShader(Shaders::flareComputeShader, nullptr, 0);
-			d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globalData);
-			d3d_context->CSSetConstantBuffers(2, 1, &Buffers::ghostData);
+			d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globaldata);
 			d3d_context->CSSetUnorderedAccessViews(0, 1, &unit_patch.ua_vertices_resource_view, nullptr);
-			d3d_context->CSSetUnorderedAccessViews(1, 1, &Textures::lensInterface_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(1, 1, &Buffers::lensInterface_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(2, 1, &Buffers::ghostdata_view, nullptr);
 
 			d3d_context->VSSetShader(Shaders::flareVertexShader, nullptr, 0);
-			d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globalData);
+			d3d_context->VSSetConstantBuffers(1, 1, &Buffers::globaldata);
 
 			d3d_context->PSSetShader(Shaders::flarePixelShaderDebug, nullptr, 0);
 			d3d_context->PSSetSamplers(0, 1, &Textures::linear_clamp_sampler);
-			d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globalData);
+			d3d_context->PSSetConstantBuffers(1, 1, &Buffers::globaldata);
 			d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
+			
 			// Dispatch
 			d3d_context->Dispatch(num_groups, num_groups, 3);
 			d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
+			d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
 			// Draw
 			d3d_context->VSSetShaderResources(0, 1, &unit_patch.vertices_resource_view);
