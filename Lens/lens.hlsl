@@ -82,19 +82,6 @@ Intersection TestSphere(Ray r, LensInterface F) {
 	return i;
 }
 
-float FresnelReflectance(float lambda, float d, float theta1, float n1, float n2, float n3) {
-	float ni = n1;
-	float nt = n3;
-
-	float Oi = theta1;
-	float Ot = asin((ni/nt) * sin(Oi));
-
-	float Rs = ( ni*cos(Oi) - nt*cos(Ot) ) / ( ni*cos(Oi) + nt*cos(Ot) );
-	float Rp = ( ni*cos(Ot) - nt*cos(Oi) ) / ( ni*cos(Ot) + nt*cos(Oi) );
-
-	return (Rs + Rp) * 0.5;
-}
-
 float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float n2) {
 	float theta1 = asin(sin(theta0) *n0 / n1);
 	float theta2 = asin(sin(theta0) *n0 / n2);
@@ -121,7 +108,6 @@ float FresnelAR(float theta0, float lambda, float d1, float n0, float n1, float 
 	return (out_s2+out_p2) / 2 ;
 }
 
-
 Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 	int LEN = bounce_pair.x + (bounce_pair.x - bounce_pair.y) + (num_interfaces - bounce_pair.y) - 1;
 	int PHASE = 0;
@@ -143,7 +129,7 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 			i = TestSphere(r, lens_interface[T]);
 
 		[branch]
-		if (!i.hit){
+		if (!i.hit) {
 			r.pos = 0;
 			r.tex.a = 0;
 			break; // exit upon miss
@@ -167,7 +153,6 @@ Ray Trace(Ray r, float lambda, int2 bounce_pair) {
 
 		// do reflection / refraction for spher . surfaces
 		float n0 = r.dir.z < 0.f ? F.n.x : F.n.z;
-		// float n1 = F.n.y;
 		float n2 = r.dir.z < 0.f ? F.n.z : F.n.x;
 
 		if (!bReflect) { // refraction
@@ -295,7 +280,7 @@ PSInput getTraceResult(float2 ndc, float wavelength, int2 bounces){
 	return result;
 }
 
-// Compute
+// Compute Shader
 // ----------------------------------------------------------------------------------
 [numthreads(NUM_THREADS, NUM_THREADS, 1)]
 void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_GroupIndex) {
@@ -316,19 +301,18 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 	uint offset = PosToOffset(pos) + data_offset;
 	uav_buffer[offset].reflectance.a = 0;
 
-	//AllMemoryBarrierWithGroupSync();
+	// AllMemoryBarrierWithGroupSync();
 
 	uav_buffer[offset].pos = result.pos;
 	uav_buffer[offset].color = result.color;
 	uav_buffer[offset].coordinates = result.coordinates;
 
-	if(gid.z == 0) {
+	if(gid.z == 0)
 		uav_buffer[offset].reflectance.r = result.reflectance.a;
-	}else if(gid.z == 1){
+	else if(gid.z == 1)
 		uav_buffer[offset].reflectance.g = result.reflectance.a;
-	}else if(gid.z == 2){
+	else if(gid.z == 2)
 		uav_buffer[offset].reflectance.b = result.reflectance.a;
-	}
 
 	uav_buffer[offset].color.w = GetArea(pos, data_offset);
 
@@ -355,7 +339,7 @@ float4 PS(in PSInput input) : SV_Target {
 	float4 coordinates = input.coordinates;
 
 	float2 aperture_uv = (coordinates.zw + 1.f)/2.f;
-	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).g;
+	float aperture = input_texture1.Sample(LinearSampler, aperture_uv).b;
 	
 	float fade = 0.2;
 	float lens_distance = length(coordinates.xy);
@@ -374,7 +358,6 @@ float4 PS(in PSInput input) : SV_Target {
 	float alpha5 = aperture_disk;
 	float alpha = alpha1 * alpha2 * alpha3 * alpha4 * alpha5;
 
-	[branch]
 	if(alpha == 0.f)
 		discard;
 
