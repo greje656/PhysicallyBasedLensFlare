@@ -89,7 +89,7 @@ StarbustInput VSStarburst(float4 pos : POSITION ) {
 	float oo = oo1 * oo2;
 	intensity *= oo;
 
-	float opening = saturate(aperture_opening/10.f);
+	float opening = 0.1 + saturate(aperture_opening/10.f);
 	intensity *= opening * 0.5;
 
 	result.pos = float4(pos.xy * (0.1  + opening), 0.f, 1.f);
