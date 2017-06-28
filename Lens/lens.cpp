@@ -105,7 +105,6 @@ struct UI {
 	float number_of_blades = 5.f;
 	XMFLOAT3 direction = { 0.f, 0.f, -1.f };
 
-	// UI
 	bool left_mouse_down = false;
 	bool spacebar_down = false;
 	bool key_down = false;
@@ -119,7 +118,6 @@ struct UI {
 } UI;
 
 namespace nikon_28_75mm {
-	// Nikon Description
 	const float d6 = 53.142f;
 	const float d10 = 7.063f;
 	const float d14 = 1.532f;
