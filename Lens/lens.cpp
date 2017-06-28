@@ -12,8 +12,8 @@
 #include "ray_trace.h"
 #include "fft.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -21,10 +21,10 @@ struct PatentFormat {
 	float r;
 	float d;
 	float n;
-	bool flat;
+	bool  f;
 	float w;
 	float h;
-	float coating_thickness;
+	float c;
 };
 
 struct PS_INPUT {
@@ -93,6 +93,7 @@ LensShapes::Circle unit_circle;
 LensShapes::Square unit_square;
 LensShapes::RayBundleData ray_bundle_data;
 std::vector<LensInterface> lens_interface;
+std::vector<GhostData> ghosts;
 
 // Lens inputs
 float x_dir = 0.f;
@@ -340,7 +341,7 @@ namespace Textures {
 	ID3D11SamplerState*        linear_clamp_sampler = nullptr;
 	ID3D11SamplerState*        linear_wrap_sampler = nullptr;
 
-	void InitializeSamplers() {
+	void InitSamplers() {
 		D3D11_SAMPLER_DESC desc;
 		ZeroMemory(&desc, sizeof(desc));
 		desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -354,9 +355,8 @@ namespace Textures {
 		desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 		d3d_device->CreateSamplerState(&desc, &Textures::linear_wrap_sampler);
 	}
-	
 
-	void initTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
+	void CreateTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
 		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view, D3D11_SUBRESOURCE_DATA* data = nullptr) {
 		
 		HRESULT hr;
@@ -393,7 +393,7 @@ namespace Textures {
 
 	}
 
-	void InitializeDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
+	void CreateDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
 		HRESULT hr;
 
 		// Create depth stencil texture
@@ -426,25 +426,23 @@ namespace Textures {
 		d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
 		d3d_device->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
 
-		Textures::initTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
-		Textures::initTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
-		Textures::initTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
-		Textures::initTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
-		Textures::InitializeDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthbuffer, Textures::depthstencil_view);
-		Textures::InitializeDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
-		Textures::InitializeDepthBuffer((int)starburst_resolution, (int)starburst_resolution, Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
+		Textures::CreateTexture((int)backbuffer_width, (int)backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
+		Textures::CreateTexture((int)aperture_resolution, (int)aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
+		Textures::CreateTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
+		Textures::CreateTexture((int)starburst_resolution, (int)starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
+		Textures::CreateDepthBuffer((int)backbuffer_width, (int)backbuffer_height, Textures::depthbuffer, Textures::depthstencil_view);
+		Textures::CreateDepthBuffer((int)aperture_resolution, (int)aperture_resolution, Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
+		Textures::CreateDepthBuffer((int)starburst_resolution, (int)starburst_resolution, Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
 
 		HBITMAP bitmap = LoadBitmap(g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
 		int size = 512 * 512 * 4;
 		void* bitmap_data = malloc(size);
 		GetBitmapBits(bitmap, size, bitmap_data);
-		
 		D3D11_SUBRESOURCE_DATA resource_data;
 		resource_data.pSysMem = bitmap_data;
 		resource_data.SysMemPitch = 512 * 4;
 		resource_data.SysMemSlicePitch = 512* 512 * 4;
-		
-		Textures::initTexture(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
+		Textures::CreateTexture(512, 512, DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
 	}
 }
 
@@ -583,6 +581,10 @@ namespace Shaders {
 }
 
 namespace Buffers {
+
+	D3D11_RESOURCE_MISC_FLAG DEFAULT_MISC_FLAG = D3D11_RESOURCE_MISC_FLAG(0);
+	D3D11_BIND_FLAG D3D11_BIND_SR_OR_UA_FLAG = D3D11_BIND_FLAG(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
+
 	ID3D11Buffer* ghostdata = nullptr;
 	ID3D11Buffer* globaldata = nullptr;
 	ID3D11Buffer* instanceUniforms = nullptr;
@@ -594,75 +596,56 @@ namespace Buffers {
 	ID3D11UnorderedAccessView* ghostdata_view;
 	ID3D11UnorderedAccessView* lensInterface_view;
 
+	void CreateBuffer(ID3D11Buffer** buffer, UINT size, UINT struct_size, D3D11_BIND_FLAG bind_flag,
+		D3D11_RESOURCE_MISC_FLAG misc_flag, void* init_data_ptr) {
+
+		D3D11_BUFFER_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = bind_flag;
+		desc.MiscFlags = misc_flag;
+		desc.CPUAccessFlags = 0;
+		desc.StructureByteStride = struct_size;
+		desc.ByteWidth = size * struct_size;
+
+		D3D11_SUBRESOURCE_DATA init_data = { init_data_ptr, sizeof(init_data), 0 };
+
+		d3d_device->CreateBuffer(&desc, init_data_ptr ? &init_data : nullptr, buffer);
+	}
+
+	void CreateSRView(ID3D11Buffer* buffer, ID3D11ShaderResourceView** view, UINT num_elements) {
+		D3D11_SHADER_RESOURCE_VIEW_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+		desc.BufferEx.FirstElement = 0;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.BufferEx.NumElements = num_elements;
+
+		d3d_device->CreateShaderResourceView(buffer, &desc, view);
+	}
+
+	void CreateUAView(ID3D11Buffer* buffer, ID3D11UnorderedAccessView** view, UINT num_elements) {
+		D3D11_UNORDERED_ACCESS_VIEW_DESC desc;
+		ZeroMemory(&desc, sizeof(desc));
+		desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+		desc.Buffer.FirstElement = 0;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.Buffer.NumElements = num_elements;
+
+		d3d_device->CreateUnorderedAccessView(buffer, &desc, view);
+	}
+
 	void InitBuffers() {
-		HRESULT hr;
+		CreateBuffer(&Buffers::globaldata, 1, sizeof(GlobalData), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::instanceUniforms, 1, sizeof(InstanceUniforms), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::intersectionPoints1, num_of_intersections_1, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::intersectionPoints2, num_of_intersections_2, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::intersectionPoints3, num_of_intersections_3, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::ghostdata, num_of_ghosts, sizeof(GhostData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &ghosts[0]);
+		CreateBuffer(&Buffers::lensInterface, (UINT)lens_interface.size(), sizeof(LensInterface), D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &lens_interface[0]);
 
-		D3D11_BUFFER_DESC bd;
-		ZeroMemory(&bd, sizeof(bd));
-		bd.Usage = D3D11_USAGE_DEFAULT;
-		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		bd.CPUAccessFlags = 0;
-		bd.ByteWidth = sizeof(InstanceUniforms);
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::instanceUniforms);
-
-		ZeroMemory(&bd, sizeof(bd));
-		bd.Usage = D3D11_USAGE_DEFAULT;
-		bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-		bd.CPUAccessFlags = 0;
-		bd.ByteWidth = sizeof(GlobalData);
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::globaldata);
-
-		bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_1;
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints1);
-
-		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_2;
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints2);
-
-		bd.ByteWidth = sizeof(SimpleVertex) * num_of_intersections_3;
-		hr = d3d_device->CreateBuffer(&bd, nullptr, &Buffers::intersectionPoints3);
-
-		std::vector<GhostData> gd;
-		int bounce1 = 2;
-		int bounce2 = 1;
-		int ghost_index = 0;
-		gd.resize(num_of_ghosts);
-		while (true) {
-			if (bounce1 >= (int)(lens_interface.size() - 1)) {
-				bounce2++;
-				bounce1 = bounce2 + 1;
-			}
-
-			if (bounce2 >= (int)(lens_interface.size() - 1)) {
-				break;
-			}
-
-			gd[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
-			bounce1++;
-			ghost_index++;
-		}
-
-		ZeroMemory(&bd, sizeof(bd));
-		bd.Usage = D3D11_USAGE_DEFAULT;
-		bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
-		bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-		bd.CPUAccessFlags = 0;
-		bd.StructureByteStride = sizeof(GhostData);
-		bd.ByteWidth = sizeof(GhostData) * num_of_ghosts;
-		D3D11_SUBRESOURCE_DATA InitData;
-		ZeroMemory(&InitData, sizeof(InitData));
-		InitData.pSysMem = (int*)&gd[0];
-		d3d_device->CreateBuffer(&bd, &InitData, &Buffers::ghostdata);
-
-		D3D11_UNORDERED_ACCESS_VIEW_DESC uaGhostDescView;
-		ZeroMemory(&uaGhostDescView, sizeof(uaGhostDescView));
-		uaGhostDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-		uaGhostDescView.Buffer.FirstElement = 0;
-		uaGhostDescView.Format = DXGI_FORMAT_UNKNOWN;
-		uaGhostDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-		d3d_device->CreateUnorderedAccessView(Buffers::ghostdata, &uaGhostDescView, &Buffers::ghostdata_view);
-
+		CreateUAView(Buffers::ghostdata, &Buffers::ghostdata_view, num_of_ghosts);
+		CreateUAView(Buffers::lensInterface, &Buffers::lensInterface_view, (UINT)lens_interface.size());
 	}
 }
 
@@ -797,7 +780,6 @@ void UpdateLensComponents() {
 void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
 	lens_interface.resize(num_of_lens_components);
-
 	for (int i = num_of_lens_components - 1; i >= 0; --i) {
 		PatentFormat& entry = lens_components[i];
 		total_lens_distance += entry.d;
@@ -813,37 +795,35 @@ void ParseLensComponents() {
 		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
 		vec3 n = { left_ior, 1.f, right_ior };
 
-		LensInterface component = { center, entry.r, n, entry.h, entry.coating_thickness, (float)entry.flat, total_lens_distance, entry.w };
+		LensInterface component = { center, entry.r, n, entry.h, entry.c, (float)entry.f, total_lens_distance, entry.w };
 		lens_interface[i] = component;
 	}
 
-	HRESULT hr;
-	D3D11_BUFFER_DESC bd;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	bd.CPUAccessFlags = 0;
-	bd.ByteWidth = (int)lens_interface.size() * (int)sizeof(LensInterface);
-	bd.StructureByteStride = sizeof(LensInterface);
+	// Enumerate all possible ghosts of the lens system
+	int bounce1 = 2;
+	int bounce2 = 1;
+	int ghost_index = 0;
+	ghosts.resize(num_of_ghosts);
+	while (true) {
+		if (bounce1 >= (int)(lens_interface.size() - 1)) {
+			bounce2++;
+			bounce1 = bounce2 + 1;
+		}
 
-	D3D11_SUBRESOURCE_DATA data;
-	data.pSysMem = &lens_interface.front();
-	hr = d3d_device->CreateBuffer(&bd, &data, &Buffers::lensInterface);
+		if (bounce2 >= (int)(lens_interface.size() - 1)) {
+			break;
+		}
 
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
-	ZeroMemory(&uaDescView, sizeof(uaDescView));
-	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-	uaDescView.Buffer.FirstElement = 0;
-	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
-	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-	hr = d3d_device->CreateUnorderedAccessView(Buffers::lensInterface, &uaDescView, &Buffers::lensInterface_view);
+		ghosts[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
+		bounce1++;
+		ghost_index++;
+	}
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
+HRESULT InitResources();
 void Render();
 
 //--------------------------------------------------------------------------------------
@@ -857,7 +837,11 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
 		return 0;
 
-	if( FAILED( InitDevice() ) ) {
+	if (FAILED(InitDevice())) {
+		return 0;
+	}
+
+	if (FAILED(InitResources())) {
 		return 0;
 	}
 
@@ -1025,37 +1009,9 @@ LensShapes::Square CreateUnitSquare() {
 
 	LensShapes::Square rectangle;
 
-	D3D11_BUFFER_DESC bd;
-	D3D11_SUBRESOURCE_DATA InitData;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = 6 * sizeof(int);
-	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (int*)&indices[0];
-	d3d_device->CreateBuffer(&bd, &InitData, &rectangle.indices);
-
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(SimpleVertex) * 6;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = vertices;
-
-	d3d_device->CreateBuffer(&bd, &InitData, &rectangle.vertices);
-
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(SimpleVertex) * 5;
-	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA InitData2;
-	ZeroMemory(&InitData2, sizeof(InitData2));
-	InitData2.pSysMem = lines;
-
-	d3d_device->CreateBuffer(&bd, &InitData2, &rectangle.lines);
+	Buffers::CreateBuffer(&rectangle.indices, 6, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
+	Buffers::CreateBuffer(&rectangle.vertices, 6, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &vertices[0]);
+	Buffers::CreateBuffer(&rectangle.lines, 5, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &lines[0]);
 
 	return rectangle;
 }
@@ -1092,33 +1048,10 @@ LensShapes::Circle CreateUnitCircle() {
 	SimpleVertex to_add = XMFLOAT3(0.f, 1.f / ratio, 0.f);
 	line_vertices.push_back(to_add);
 
-	D3D11_BUFFER_DESC bd1;
-	ZeroMemory(&bd1, sizeof(bd1));
-	bd1.Usage = D3D11_USAGE_DEFAULT;
-	bd1.ByteWidth = sizeof(SimpleVertex) * num_vertices_per_cirlces;
-	bd1.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd1.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA InitData1;
-	ZeroMemory(&InitData1, sizeof(InitData1));
-	InitData1.pSysMem = (float*)&triangle_vertices[0];
+	LensShapes::Circle circle = { 0.f, 0.f, 1.f };
 
-	D3D11_BUFFER_DESC bd2;
-	ZeroMemory(&bd2, sizeof(bd2));
-	bd2.Usage = D3D11_USAGE_DEFAULT;
-	bd2.ByteWidth = sizeof(SimpleVertex) * num_points_per_cirlces;
-	bd2.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-	bd2.CPUAccessFlags = 0;
-	D3D11_SUBRESOURCE_DATA InitData2;
-	ZeroMemory(&InitData2, sizeof(InitData2));
-	InitData2.pSysMem = (float*)&line_vertices[0];
-
-	LensShapes::Circle circle;
-	circle.x = 0.f;
-	circle.y = 0.f;
-	circle.r = 1.f;
-
-	d3d_device->CreateBuffer(&bd1, &InitData1, &circle.triangles);
-	d3d_device->CreateBuffer(&bd2, &InitData2, &circle.lines);
+	Buffers::CreateBuffer(&circle.triangles, num_vertices_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &triangle_vertices[0]);
+	Buffers::CreateBuffer(&circle.lines, num_points_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &line_vertices[0]);
 
 	return circle;
 }
@@ -1176,60 +1109,17 @@ LensShapes::RayBundleData CreateRayBundleData(int subdiv, int num_patches) {
 	LensShapes::RayBundleData bundle_data;
 	bundle_data.subdiv = subdiv;
 
-	D3D11_BUFFER_DESC bd;
-	D3D11_SUBRESOURCE_DATA InitData;
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = 3 * 2 * sizeof(int) * ((subdiv - 1) * (subdiv - 1)) * num_patches;
-	bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-	bd.CPUAccessFlags = 0;
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (int*)&indices[0];
-	d3d_device->CreateBuffer(&bd, &InitData, &bundle_data.indices);
-
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.ByteWidth = sizeof(PS_INPUT) * (subdiv * subdiv) * num_patches;
-	bd.StructureByteStride = sizeof(PS_INPUT);
-	bd.CPUAccessFlags = 0;
-	bd.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-	ZeroMemory(&InitData, sizeof(InitData));
-	void* vertex_data = malloc(sizeof(PS_INPUT) * subdiv * subdiv * num_patches);
-	InitData.pSysMem = vertex_data;
-	d3d_device->CreateBuffer(&bd, &InitData, &bundle_data.cs_vertices);
-
-	ZeroMemory(&bd, sizeof(bd));
-	bundle_data.cs_vertices->GetDesc(&bd);
-
-	D3D11_SHADER_RESOURCE_VIEW_DESC descView;
-	ZeroMemory(&descView, sizeof(descView));
-	descView.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-	descView.BufferEx.FirstElement = 0;
-	descView.Format = DXGI_FORMAT_UNKNOWN;
-	descView.BufferEx.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-	D3D11_UNORDERED_ACCESS_VIEW_DESC uaDescView;
-	ZeroMemory(&uaDescView, sizeof(uaDescView));
-	uaDescView.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-	uaDescView.Buffer.FirstElement = 0;
-	uaDescView.Format = DXGI_FORMAT_UNKNOWN;
-	uaDescView.Buffer.NumElements = bd.ByteWidth / bd.StructureByteStride;
-
-	d3d_device->CreateShaderResourceView(bundle_data.cs_vertices, &descView, &bundle_data.vertices_resource_view);
-	d3d_device->CreateUnorderedAccessView(bundle_data.cs_vertices, &uaDescView, &bundle_data.ua_vertices_resource_view);
-	
+	int num_of_indices = (subdiv - 1) * (subdiv - 1) * num_patches * 6;
+	int num_of_vertices = (subdiv * subdiv) * num_patches;
+	void* vertex_data = malloc(sizeof(PS_INPUT) * num_of_vertices);
 	CSIndirectData group_count_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
-	ZeroMemory(&bd, sizeof(bd));
-	bd.Usage = D3D11_USAGE_DEFAULT;
-	bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
-	bd.CPUAccessFlags = 0;
-	bd.StructureByteStride = sizeof(CSIndirectData);
-	bd.ByteWidth = sizeof(CSIndirectData);
-	ZeroMemory(&InitData, sizeof(InitData));
-	InitData.pSysMem = (int*)&group_count_info;
-	d3d_device->CreateBuffer(&bd, &InitData, &bundle_data.cs_group_count_info);
+
+	Buffers::CreateBuffer(&bundle_data.indices, num_of_indices, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
+	Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PS_INPUT), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
+	Buffers::CreateBuffer(&bundle_data.cs_group_count_info, 1, sizeof(CSIndirectData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS, &group_count_info);
+
+	Buffers::CreateSRView(bundle_data.cs_vertices, &bundle_data.vertices_resource_view, num_of_vertices);
+	Buffers::CreateUAView(bundle_data.cs_vertices, &bundle_data.ua_vertices_resource_view, num_of_vertices);
 	
 	return bundle_data;
 }
@@ -1350,14 +1240,17 @@ HRESULT InitDevice()
 	dxgiFactory->MakeWindowAssociation( g_hWnd, DXGI_MWA_NO_ALT_ENTER );
 	dxgiFactory->Release();
 
+	return S_OK;
+}
+
+HRESULT InitResources() {
 	ParseLensComponents();
 
 	Textures::InitTextures();
-	Textures::InitializeSamplers();
+	Textures::InitSamplers();
 	Shaders::InitShaders();
 	Buffers::InitBuffers();
 	States::InitStates();
-
 	FFT::InitFFTTetxtures(d3d_device, (int)aperture_resolution);
 
 	unit_circle = CreateUnitCircle();
