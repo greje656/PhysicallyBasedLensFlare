@@ -12,8 +12,8 @@
 #include "ray_trace.h"
 #include "fft.h"
 
-//#define DRAW2D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -25,10 +25,6 @@ struct PatentFormat {
 	float w;
 	float h;
 	float coating_thickness;
-};
-
-struct SimpleVertex {
-	XMFLOAT3 pos;
 };
 
 struct PS_INPUT {
@@ -60,6 +56,7 @@ struct CSIndirectData {
 	unsigned int x, y, z;
 };
 
+typedef XMFLOAT3 SimpleVertex;
 typedef XMFLOAT4 GhostData;
 
 namespace LensShapes {
@@ -1081,12 +1078,9 @@ LensShapes::Circle CreateUnitCircle() {
 		float x2 = sin(a2);
 		float y2 = cos(a2) / ratio;
 
-		SimpleVertex to_add1;
-		SimpleVertex to_add2;
-		SimpleVertex to_add3;
-		to_add1.pos = XMFLOAT3(x1, y1, 0.f);
-		to_add2.pos = XMFLOAT3(x2, y2, 0.f);
-		to_add3.pos = XMFLOAT3(0.f, 0.f, 0.f);
+		SimpleVertex to_add1 = XMFLOAT3(x1, y1, 0.f);
+		SimpleVertex to_add2 = XMFLOAT3(x2, y2, 0.f);
+		SimpleVertex to_add3 = XMFLOAT3(0.f, 0.f, 0.f);
 
 		triangle_vertices[i * 3 + 0] = to_add1;
 		triangle_vertices[i * 3 + 1] = to_add2;
@@ -1095,8 +1089,7 @@ LensShapes::Circle CreateUnitCircle() {
 		line_vertices.push_back(to_add1);
 	}
 
-	SimpleVertex to_add;
-	to_add.pos = XMFLOAT3(0.f, 1.f / ratio, 0.f);
+	SimpleVertex to_add = XMFLOAT3(0.f, 1.f / ratio, 0.f);
 	line_vertices.push_back(to_add);
 
 	D3D11_BUFFER_DESC bd1;
