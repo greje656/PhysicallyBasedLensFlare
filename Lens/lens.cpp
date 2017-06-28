@@ -483,19 +483,17 @@ namespace Shaders {
 	}
 
 	void InitShaders() {
-		HRESULT hr;
-
 		ID3DBlob* blob = nullptr;
 		D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }, };
 		UINT numElements = ARRAYSIZE(layout);
 
-		hr = CompileShaderFromFile(L"visualization.hlsl", "VS", "vs_5_0", &blob);
-		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
-		hr = d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_2d);
+		CompileShaderFromFile(L"visualization.hlsl", "VS", "vs_5_0", &blob);
+		d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::vertexShader);
+		d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_2d);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"visualization.hlsl", "PS", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
+		CompileShaderFromFile(L"visualization.hlsl", "PS", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::pixelShader);	
 		blob->Release();
 
 		std::string aperture_id_string = std::to_string(aperture_id);
@@ -508,51 +506,51 @@ namespace Shaders {
 			"NUM_GROUPS", num_groups_string.c_str(),
 			"NUM_THREADS", num_threads_string.c_str(),
 			"PATCH_TESSELATION", patch_tesselation_string.c_str(), 0, 0 };
-		hr = CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob, lens_defines);
-		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
-		hr = d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_3d);
+		CompileShaderFromFile(L"lens.hlsl", "VS", "vs_5_0", &blob, lens_defines);
+		d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareVertexShader);
+		d3d_device->CreateInputLayout(layout, numElements, blob->GetBufferPointer(), blob->GetBufferSize(), &d3d_vertex_layout_3d);
 		blob->Release();
 		
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, lens_defines);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
+		CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, lens_defines);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShader);
 		blob->Release();	
 
 		D3D_SHADER_MACRO debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], lens_defines[3], "DEBUG_VALUES", "", 0, 0 };
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
+		CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, debug_flags);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebug);
 		blob->Release();
 
 		D3D_SHADER_MACRO wireframe_debug_flags[] = { lens_defines[0], lens_defines[1], lens_defines[2], lens_defines[3], "DEBUG_WIREFRAME", "", 0, 0 };
-		hr = CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
+		CompileShaderFromFile(L"lens.hlsl", "PS", "ps_5_0", &blob, wireframe_debug_flags);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flarePixelShaderDebugWireframe);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob, lens_defines);
-		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
+		CompileShaderFromFile(L"lens.hlsl", "CS", "cs_5_0", &blob, lens_defines);
+		d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::flareComputeShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"post.hlsl", "PSToneMapping", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
+		CompileShaderFromFile(L"post.hlsl", "PSToneMapping", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::toneMapPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"starburst.hlsl", "VSStarburst", "vs_5_0", &blob);
-		hr = d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
+		CompileShaderFromFile(L"starburst.hlsl", "VSStarburst", "vs_5_0", &blob);
+		d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstVertexShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburst", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
+		CompileShaderFromFile(L"starburst.hlsl", "PSStarburst", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
+		CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFromFFT", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFromFFTPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFilterPixelShader);
+		CompileShaderFromFile(L"starburst.hlsl", "PSStarburstFilter", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::starburstFilterPixelShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"aperture.hlsl", "PSAperture", "ps_5_0", &blob);
-		hr = d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
+		CompileShaderFromFile(L"aperture.hlsl", "PSAperture", "ps_5_0", &blob);
+		d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::aperture_ps_shader);
 		blob->Release();
 
 		int butterfly_count = (int)(logf(aperture_resolution) / logf(2.0));
@@ -562,20 +560,20 @@ namespace Shaders {
 			"LENGTH", resolution_string.c_str(),
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWPASS", "", 0, 0 };
-		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
-		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
+		CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_row);
+		d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftRowComputeShader);
 		blob->Release();
 
 		D3D_SHADER_MACRO fft_defines_col[] = {
 			"LENGTH", resolution_string.c_str(),
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
 			"ROWCOL", "", 0, 0 };
-		hr = CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
-		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
+		CompileShaderFromFile(L"fft.hlsl", "ButterflySLM", "cs_5_0", &blob, fft_defines_col);
+		d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftColComputeShader);
 		blob->Release();
 
-		hr = CompileShaderFromFile(L"copy.hlsl", "CopyTextureCS", "cs_5_0", &blob);
-		hr = d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
+		CompileShaderFromFile(L"copy.hlsl", "CopyTextureCS", "cs_5_0", &blob);
+		d3d_device->CreateComputeShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::fftCopyShader);
 		blob->Release();
 	}
 }
@@ -666,6 +664,7 @@ namespace States {
 	void InitStates() {
 		D3D11_RASTERIZER_DESC rasterState;
 		ZeroMemory(&rasterState, sizeof(D3D11_RASTERIZER_DESC));
+
 		rasterState.FillMode = D3D11_FILL_SOLID;
 		rasterState.CullMode = D3D11_CULL_BACK;
 		d3d_device->CreateRasterizerState(&rasterState, &States::rasterStateCull);
@@ -714,7 +713,16 @@ namespace States {
 		d3d_device->CreateBlendState(&AdditiveBlendState, &States::blendStateAdd);
 
 		D3D11_DEPTH_STENCIL_DESC DepthStencilState;
+		D3D11_DEPTH_STENCIL_DESC DepthStencilStateFill;
+		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualIncr;
+		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualDecr;
+		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualRead;
 		ZeroMemory(&DepthStencilState, sizeof(D3D11_DEPTH_STENCIL_DESC));
+		ZeroMemory(&DepthStencilStateFill, sizeof(D3D11_DEPTH_STENCIL_DESC));
+		ZeroMemory(&DepthStencilStateGreaterOrEqualIncr, sizeof(D3D11_DEPTH_STENCIL_DESC));
+		ZeroMemory(&DepthStencilStateGreaterOrEqualDecr, sizeof(D3D11_DEPTH_STENCIL_DESC));
+		ZeroMemory(&DepthStencilStateGreaterOrEqualRead, sizeof(D3D11_DEPTH_STENCIL_DESC));
+
 		DepthStencilState.DepthEnable = FALSE;
 		DepthStencilState.StencilEnable = FALSE;
 		DepthStencilState.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
@@ -722,16 +730,6 @@ namespace States {
 		DepthStencilState.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
 		DepthStencilState.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 		DepthStencilState.BackFace = DepthStencilState.FrontFace;
-
-		D3D11_DEPTH_STENCIL_DESC DepthStencilStateFill;
-		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualIncr;
-		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualDecr;
-		D3D11_DEPTH_STENCIL_DESC DepthStencilStateGreaterOrEqualRead;
-
-		ZeroMemory(&DepthStencilStateFill, sizeof(D3D11_DEPTH_STENCIL_DESC));
-		ZeroMemory(&DepthStencilStateGreaterOrEqualIncr, sizeof(D3D11_DEPTH_STENCIL_DESC));
-		ZeroMemory(&DepthStencilStateGreaterOrEqualDecr, sizeof(D3D11_DEPTH_STENCIL_DESC));
-		ZeroMemory(&DepthStencilStateGreaterOrEqualRead, sizeof(D3D11_DEPTH_STENCIL_DESC));
 
 		DepthStencilStateFill.DepthEnable = FALSE;
 		DepthStencilStateFill.StencilEnable = TRUE;
