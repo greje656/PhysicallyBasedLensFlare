@@ -242,31 +242,6 @@ float time = (float)ghost_bounce_1;
 float speed = 0.1f;
 float rays_spread = 0.75f;
 
-#ifdef SAVE_BACK_BUFFER_TO_DISK
-#include <DirectXTex.h>
-void SaveBackBuffer() {
-	ScratchImage scratch_image;
-	ID3D11Resource* resource = nullptr;
-	Textures::backbuffer_rt_view->GetResource(&resource);
-	CaptureTexture(g_pd3dDevice, d3d_context, resource, scratch_image);
-
-	static int frame_number = 0;
-	frame_number++;
-	std::wstringstream finle_name;
-	finle_name << "Lens";
-	if (frame_number < 10)
-		finle_name << "00";
-	else if (frame_number < 100)
-		finle_name << "0";
-
-	finle_name << frame_number;
-	finle_name << ".tga";
-
-	const Image* image = scratch_image.GetImage(0, 0, 0);
-	SaveToTGAFile(*image, finle_name.str().c_str());
-}
-#endif
-
 XMFLOAT4 sRGB(XMFLOAT4 c) {
 	XMFLOAT4 rgb = c;
 	rgb.x /= 255.f;
@@ -1995,5 +1970,4 @@ void Render() {
 	// d3d_context->PSSetShaderResources(1, 1, &Textures::dust_sr_view);
 
 	d3d_swapchain->Present(0, 0);
-	// SaveBackBuffer();
 }
