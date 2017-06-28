@@ -92,14 +92,13 @@ struct LensDescription {
 } LensDescription;
 
 struct D3dDefaults {
-	// D3d default values
 	INT sample_mask = 0x0F;
 	UINT offset = 0;
 	UINT stride = sizeof(SimpleVertex);
 	float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
 } D3dDefaults;
 
-struct UIValues {
+struct UI {
 	float x_dir = 0.f;
 	float y_dir = 0.f;
 	float aperture_opening = 7.f;
@@ -117,7 +116,7 @@ struct UIValues {
 	bool overlay_wireframe = false;
 	bool aperture_needs_updating = true;
 	bool draw2d = true;
-} UIValues;
+} UI;
 
 namespace nikon_28_75mm {
 	// Nikon Description
@@ -151,7 +150,7 @@ namespace nikon_28_75mm {
 		{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 },
 		{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 },
 
-		{       0.0f,     dAp, 1.00000f, true,  18.f, UIValues.aperture_opening, 440 },
+		{       0.0f,     dAp, 1.00000f, true,  18.f, UI.aperture_opening, 440 },
 
 		{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 },
 
@@ -192,7 +191,7 @@ namespace angenieux {
 		{  2551.10f,    2.58f, 1.67510f, false, 0.5f, 42.0f, 612 },
 		{    32.39f,   30.66f, 1.00000f, false, 0.3f, 36.0f, 732 },
 		
-		{      0.0f,   10.00f, 1.00000f, true,  25.f, UIValues.aperture_opening, 440 },
+		{      0.0f,   10.00f, 1.00000f, true,  25.f, UI.aperture_opening, 440 },
 
 		{   -40.42f,    2.74f, 1.69920f, false, 1.5f, 13.0f, 602 },
 
@@ -776,7 +775,7 @@ namespace States {
 }
 
 void UpdateLensComponents() {
-	LensDescription.lens_interface[aperture_id].sa = UIValues.aperture_opening;
+	LensDescription.lens_interface[aperture_id].sa = UI.aperture_opening;
 	LensInterface aperture_component = LensDescription.lens_interface[aperture_id];
 	D3D11_BOX box = { aperture_id * sizeof(LensInterface), 0, 0, (aperture_id + 1) * sizeof(LensInterface), 1, 1 };
 	d3d_context->UpdateSubresource(Buffers::lens_interface, 0, &box, &aperture_component, 0, 0);
@@ -855,56 +854,56 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	while( WM_QUIT != msg.message ) {
 
 		if (msg.message == WM_KEYDOWN) {
-			if (!UIValues.key_down && msg.wParam == 65)
-				UIValues.overlay_wireframe = !UIValues.overlay_wireframe;
+			if (!UI.key_down && msg.wParam == 65)
+				UI.overlay_wireframe = !UI.overlay_wireframe;
 
-			if (!UIValues.key_down && msg.wParam == 69)
-				UIValues.editing_coating_quality = !UIValues.editing_coating_quality;
+			if (!UI.key_down && msg.wParam == 69)
+				UI.editing_coating_quality = !UI.editing_coating_quality;
 
-			if (!UIValues.key_down && msg.wParam == 81)
-				UIValues.editing_aperture = true;
+			if (!UI.key_down && msg.wParam == 81)
+				UI.editing_aperture = true;
 
-			if (!UIValues.key_down && msg.wParam == 82)
-				UIValues.editing_no_blades = true;
+			if (!UI.key_down && msg.wParam == 82)
+				UI.editing_no_blades = true;
 
-			if (!UIValues.key_down && msg.wParam == 87)
-				UIValues.editing_spread = true;
+			if (!UI.key_down && msg.wParam == 87)
+				UI.editing_spread = true;
 
-			if (!UIValues.key_down && msg.wParam == 32)
-				UIValues.draw2d = !UIValues.draw2d;
+			if (!UI.key_down && msg.wParam == 32)
+				UI.draw2d = !UI.draw2d;
 
-			if (!UIValues.key_down && msg.wParam == 37)
+			if (!UI.key_down && msg.wParam == 37)
 				ghost_bounce_1 = std::max<int>(2, ghost_bounce_1 - 1);
 
-			if (!UIValues.key_down && msg.wParam == 39)
+			if (!UI.key_down && msg.wParam == 39)
 				ghost_bounce_1 = std::min<int>((int)LensDescription.lens_interface.size() - 2, ghost_bounce_1 + 1);
 
-			if (!UIValues.key_down && msg.wParam == 40)
+			if (!UI.key_down && msg.wParam == 40)
 				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
 
-			if (!UIValues.key_down && msg.wParam == 38) {
+			if (!UI.key_down && msg.wParam == 38) {
 				ghost_bounce_2 = std::min<int>((int)LensDescription.lens_interface.size() - 2, ghost_bounce_2 + 1);
 				ghost_bounce_2 = std::min<int>(ghost_bounce_1 - 2, ghost_bounce_2);
 			}
 		
 			ghost_bounce_1 = std::max<int>(ghost_bounce_2 + 2, ghost_bounce_1);
-			UIValues.key_down = true;
+			UI.key_down = true;
 		}
 
 		if (msg.message == WM_KEYUP) {
-			UIValues.key_down = false;
-			UIValues.editing_aperture = false;
-			UIValues.editing_no_blades = false;
-			UIValues.editing_spread = false;
-			UIValues.editing_coating_quality = false;
+			UI.key_down = false;
+			UI.editing_aperture = false;
+			UI.editing_no_blades = false;
+			UI.editing_spread = false;
+			UI.editing_coating_quality = false;
 		}
 
 		if (msg.message == WM_LBUTTONDOWN) {
-			UIValues.left_mouse_down = true;
+			UI.left_mouse_down = true;
 		}
 
 		if (msg.message == WM_LBUTTONUP) {
-			UIValues.left_mouse_down = false;
+			UI.left_mouse_down = false;
 		}
 
 		if (msg.message == WM_MOUSEMOVE) {
@@ -915,30 +914,30 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			float nx = ((p.x / backbuffer_width) * 2.f - 1.f);
 			float ny = ((p.y / backbuffer_height) * 2.f - 1.f);
 
-			if (!UIValues.key_down && UIValues.left_mouse_down) {
-				UIValues.x_dir = nx * 0.2f;
-				UIValues.y_dir = ny * 0.2f;
+			if (!UI.key_down && UI.left_mouse_down) {
+				UI.x_dir = nx * 0.2f;
+				UI.y_dir = ny * 0.2f;
 			}
 
-			if (UIValues.editing_aperture) {
-				UIValues.aperture_opening = 5.f + ny * 5.f;
+			if (UI.editing_aperture) {
+				UI.aperture_opening = 5.f + ny * 5.f;
 				UpdateLensComponents();
 			}
 
-			if (UIValues.editing_no_blades) {
-				UIValues.number_of_blades = 10.f + ny * 5.f;
+			if (UI.editing_no_blades) {
+				UI.number_of_blades = 10.f + ny * 5.f;
 			}
 
-			if (UIValues.editing_spread) {
+			if (UI.editing_spread) {
 				rays_spread = 5.f + ny * 5.f;
 			}
 
-			if (UIValues.editing_coating_quality) {
+			if (UI.editing_coating_quality) {
 				coating_quality = 0.5f + ny;
 			}
 
-			if (UIValues.editing_aperture || UIValues.editing_no_blades)
-				UIValues.aperture_needs_updating = true;
+			if (UI.editing_aperture || UI.editing_no_blades)
+				UI.aperture_needs_updating = true;
 		}
 
 		if( PeekMessage( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
@@ -1586,16 +1585,16 @@ void UpdateGlobals() {
 	time += speed;
 	
 	#if defined(DRAWLENSFLARE)
-		vec3 dir = normalize(vec3(-UIValues.x_dir, UIValues.y_dir, -1.f));
+		vec3 dir = normalize(vec3(-UI.x_dir, UI.y_dir, -1.f));
 	#else
-		vec3 dir = normalize(vec3(UIValues.draw2d ? 0 : -UIValues.x_dir, UIValues.y_dir, -1.f));
+		vec3 dir = normalize(vec3(UI.draw2d ? 0 : -UI.x_dir, UI.y_dir, -1.f));
 
 		D3D11_BOX box = { 0, 0, 0, sizeof(GhostData), 1, 1 };
 		GhostData updated_ghostdata = { (float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0 };
 		d3d_context->UpdateSubresource(Buffers::ghostdata, 0, &box, &updated_ghostdata, 0, 0);
 	#endif
 
-	UIValues.direction = XMFLOAT3(dir.x, dir.y, dir.z);
+	UI.direction = XMFLOAT3(dir.x, dir.y, dir.z);
 
 	GlobalData updated_globaldata = {
 		time,
@@ -1607,8 +1606,8 @@ void UpdateGlobals() {
 		coating_quality,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
-		XMFLOAT4(UIValues.direction.x, UIValues.direction.y, UIValues.direction.z, aperture_resolution),
-		XMFLOAT4(UIValues.aperture_opening, UIValues.number_of_blades, starburst_resolution, 0.f)
+		XMFLOAT4(UI.direction.x, UI.direction.y, UI.direction.z, aperture_resolution),
+		XMFLOAT4(UI.aperture_opening, UI.number_of_blades, starburst_resolution, 0.f)
 	};
 
 	d3d_context->UpdateSubresource(Buffers::globaldata, 0, nullptr, &updated_globaldata, 0, 0);
@@ -1674,10 +1673,10 @@ void Render() {
 
 	UpdateGlobals();
 
-	if (UIValues.aperture_needs_updating) {
+	if (UI.aperture_needs_updating) {
 		DrawAperture();
 		DrawStarBurst();
-		UIValues.aperture_needs_updating = false;
+		UI.aperture_needs_updating = false;
 	}
 
 	#if defined(DRAWLENSFLARE)
@@ -1752,7 +1751,7 @@ void Render() {
 		d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	#else
-		if(!UIValues.draw2d) {
+		if(!UI.draw2d) {
 			d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
 			d3d_context->IASetIndexBuffer(LensShapes::ray_bundle_data.indices, DXGI_FORMAT_R32_UINT, 0);
 			d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1788,7 +1787,7 @@ void Render() {
 			d3d_context->RSSetState(States::rs_no_cull);
 			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 
-			if (UIValues.overlay_wireframe) {
+			if (UI.overlay_wireframe) {
 				d3d_context->RSSetState(States::rs_wireframe);
 				d3d_context->PSSetShader(Shaders::ps_lens_flare_wireframe, nullptr, 0);
 				d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
@@ -1815,7 +1814,7 @@ void Render() {
 			std::vector<std::vector<vec3>> intersections2(num_of_rays);
 			std::vector<std::vector<vec3>> intersections3(num_of_rays);
 
-			vec3 dir(UIValues.direction.x, UIValues.direction.y, UIValues.direction.z);
+			vec3 dir(UI.direction.x, UI.direction.y, UI.direction.z);
 			for (int i = 0; i < num_of_rays; ++i) {
 				float pos = lerp(-1.f, 1.f, (float)i / (float)(num_of_rays - 1)) * rays_spread;
 
