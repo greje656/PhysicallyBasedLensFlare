@@ -27,18 +27,6 @@ struct PatentFormat {
 	float c;
 };
 
-struct PS_INPUT {
-	XMFLOAT4 position;
-	XMFLOAT4 texture;
-	XMFLOAT4 mask;
-	XMFLOAT4 ref;
-};
-
-struct InstanceUniforms {
-	XMFLOAT4 color;
-	XMFLOAT4 placement;
-};
-
 struct GlobalData {
 	float time;
 	float spread;
@@ -50,6 +38,18 @@ struct GlobalData {
 	XMFLOAT2 backbuffer_size;
 	XMFLOAT4 direction;
 	XMFLOAT4 aperture_opening;
+};
+
+struct PSInput {
+	XMFLOAT4 pos;
+	XMFLOAT4 color;
+	XMFLOAT4 coordinates;
+	XMFLOAT4 reflectance;
+};
+
+struct InstanceUniforms {
+	XMFLOAT4 color;
+	XMFLOAT4 placement;
 };
 
 struct CSIndirectData {
@@ -81,40 +81,43 @@ namespace LensShapes {
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
 	};
 
-	LensShapes::Circle unit_circle;
-	LensShapes::Square unit_square;
-	LensShapes::RayBundleData ray_bundle_data;
+	Circle unit_circle;
+	Square unit_square;
+	RayBundleData ray_bundle_data;
 }
 
-namespace LensDescription {
+struct LensDescription {
 	std::vector<LensInterface> lens_interface;
 	std::vector<GhostData> ghosts;
-}
+} LensDescription;
 
-// D3d default values
-INT sample_mask = 0x0F;
-UINT offset = 0;
-UINT stride = sizeof(SimpleVertex);
-float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
+struct D3dDefaults {
+	// D3d default values
+	INT sample_mask = 0x0F;
+	UINT offset = 0;
+	UINT stride = sizeof(SimpleVertex);
+	float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
+} D3dDefaults;
 
-// Lens inputs
-float x_dir = 0.f;
-float y_dir = 0.f;
-float aperture_opening = 7.f;
-float number_of_blades = 5.f;
-XMFLOAT3 direction(0.f, 0.f, -1.f);
+struct UIValues {
+	float x_dir = 0.f;
+	float y_dir = 0.f;
+	float aperture_opening = 7.f;
+	float number_of_blades = 5.f;
+	XMFLOAT3 direction = { 0.f, 0.f, -1.f };
 
-// UI
-bool left_mouse_down = false;
-bool spacebar_down = false;
-bool key_down = false;
-bool editing_aperture = false;
-bool editing_no_blades = false;
-bool editing_spread = false;
-bool editing_coating_quality = false;
-bool overlay_wireframe = false;
-bool aperture_needs_updating = true;
-bool draw2d = true;
+	// UI
+	bool left_mouse_down = false;
+	bool spacebar_down = false;
+	bool key_down = false;
+	bool editing_aperture = false;
+	bool editing_no_blades = false;
+	bool editing_spread = false;
+	bool editing_coating_quality = false;
+	bool overlay_wireframe = false;
+	bool aperture_needs_updating = true;
+	bool draw2d = true;
+} UIValues;
 
 namespace nikon_28_75mm {
 	// Nikon Description
@@ -148,7 +151,7 @@ namespace nikon_28_75mm {
 		{    54.262f,  6.000f, 1.69680f, false, 0.5f, 18.0f, 800 },
 		{ -5995.277f,     d14, 1.00000f, false, 0.5f, 18.0f, 300 },
 
-		{       0.0f,     dAp, 1.00000f, true,  18.f, aperture_opening, 440 },
+		{       0.0f,     dAp, 1.00000f, true,  18.f, UIValues.aperture_opening, 440 },
 
 		{   -74.414f,  2.200f, 1.90265f, false, 0.5f, 13.0f, 500 },
 
@@ -189,7 +192,7 @@ namespace angenieux {
 		{  2551.10f,    2.58f, 1.67510f, false, 0.5f, 42.0f, 612 },
 		{    32.39f,   30.66f, 1.00000f, false, 0.3f, 36.0f, 732 },
 		
-		{      0.0f,   10.00f, 1.00000f, true,  25.f, aperture_opening, 440 },
+		{      0.0f,   10.00f, 1.00000f, true,  25.f, UIValues.aperture_opening, 440 },
 
 		{   -40.42f,    2.74f, 1.69920f, false, 1.5f, 13.0f, 602 },
 
@@ -295,22 +298,22 @@ XMFLOAT4 lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
 // Global Variables
 //--------------------------------------------------------------------------------------
 
-HINSTANCE                      g_hInst = nullptr;
-HWND                           g_hWnd = nullptr;
+HINSTANCE             g_hInst = nullptr;
+HWND                  g_hWnd = nullptr;
 
-IDXGISwapChain*                d3d_swapchain = nullptr;
-IDXGISwapChain1*               d3d_swapchain1 = nullptr;
+IDXGISwapChain*       d3d_swapchain = nullptr;
+IDXGISwapChain1*      d3d_swapchain1 = nullptr;
 
-ID3D11InputLayout*             d3d_vertex_layout_2d = nullptr;
-ID3D11InputLayout*             d3d_vertex_layout_3d = nullptr;
+ID3D11InputLayout*    d3d_vertex_layout_2d = nullptr;
+ID3D11InputLayout*    d3d_vertex_layout_3d = nullptr;
 
-ID3D11Device*                  d3d_device = nullptr;
-ID3D11Device1*                 d3d_device1 = nullptr;
-ID3D11DeviceContext*           d3d_context = nullptr;
-ID3D11DeviceContext1*          d3d_context1 = nullptr;
+ID3D11Device*         d3d_device = nullptr;
+ID3D11Device1*        d3d_device1 = nullptr;
+ID3D11DeviceContext*  d3d_context = nullptr;
+ID3D11DeviceContext1* d3d_context1 = nullptr;
 
-D3D_DRIVER_TYPE                d3d_driver_type = D3D_DRIVER_TYPE_NULL;
-D3D_FEATURE_LEVEL              d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
+D3D_DRIVER_TYPE       d3d_driver_type = D3D_DRIVER_TYPE_NULL;
+D3D_FEATURE_LEVEL     d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
 
 namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
@@ -643,11 +646,11 @@ namespace Buffers {
 		CreateBuffer(&Buffers::intersection_points1, num_of_intersections_1, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&Buffers::intersection_points2, num_of_intersections_2, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&Buffers::intersection_points3, num_of_intersections_3, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
-		CreateBuffer(&Buffers::ghostdata, num_of_ghosts, sizeof(GhostData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription::ghosts[0]);
-		CreateBuffer(&Buffers::lens_interface, (UINT)LensDescription::lens_interface.size(), sizeof(LensInterface), D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription::lens_interface[0]);
+		CreateBuffer(&Buffers::ghostdata, num_of_ghosts, sizeof(GhostData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription.ghosts[0]);
+		CreateBuffer(&Buffers::lens_interface, (UINT)LensDescription.lens_interface.size(), sizeof(LensInterface), D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription.lens_interface[0]);
 
 		CreateUAView(Buffers::ghostdata, &Buffers::ghostdata_view, num_of_ghosts);
-		CreateUAView(Buffers::lens_interface, &Buffers::lensInterface_view, (UINT)LensDescription::lens_interface.size());
+		CreateUAView(Buffers::lens_interface, &Buffers::lensInterface_view, (UINT)LensDescription.lens_interface.size());
 	}
 }
 
@@ -773,15 +776,15 @@ namespace States {
 }
 
 void UpdateLensComponents() {
-	LensDescription::lens_interface[aperture_id].sa = aperture_opening;
-	LensInterface aperture_component = LensDescription::lens_interface[aperture_id];
+	LensDescription.lens_interface[aperture_id].sa = UIValues.aperture_opening;
+	LensInterface aperture_component = LensDescription.lens_interface[aperture_id];
 	D3D11_BOX box = { aperture_id * sizeof(LensInterface), 0, 0, (aperture_id + 1) * sizeof(LensInterface), 1, 1 };
 	d3d_context->UpdateSubresource(Buffers::lens_interface, 0, &box, &aperture_component, 0, 0);
 }
 
 void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
-	LensDescription::lens_interface.resize(num_of_lens_components);
+	LensDescription.lens_interface.resize(num_of_lens_components);
 	for (int i = num_of_lens_components - 1; i >= 0; --i) {
 		PatentFormat& entry = lens_components[i];
 		total_lens_distance += entry.d;
@@ -798,25 +801,25 @@ void ParseLensComponents() {
 		vec3 n = { left_ior, 1.f, right_ior };
 
 		LensInterface component = { center, entry.r, n, entry.h, entry.c, (float)entry.f, total_lens_distance, entry.w };
-		LensDescription::lens_interface[i] = component;
+		LensDescription.lens_interface[i] = component;
 	}
 
 	// Enumerate all possible ghosts of the lens system
 	int bounce1 = 2;
 	int bounce2 = 1;
 	int ghost_index = 0;
-	LensDescription::ghosts.resize(num_of_ghosts);
+	LensDescription.ghosts.resize(num_of_ghosts);
 	while (true) {
-		if (bounce1 >= (int)(LensDescription::lens_interface.size() - 1)) {
+		if (bounce1 >= (int)(LensDescription.lens_interface.size() - 1)) {
 			bounce2++;
 			bounce1 = bounce2 + 1;
 		}
 
-		if (bounce2 >= (int)(LensDescription::lens_interface.size() - 1)) {
+		if (bounce2 >= (int)(LensDescription.lens_interface.size() - 1)) {
 			break;
 		}
 
-		LensDescription::ghosts[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
+		LensDescription.ghosts[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
 		bounce1++;
 		ghost_index++;
 	}
@@ -852,56 +855,56 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	while( WM_QUIT != msg.message ) {
 
 		if (msg.message == WM_KEYDOWN) {
-			if (!key_down && msg.wParam == 65)
-				overlay_wireframe = !overlay_wireframe;
+			if (!UIValues.key_down && msg.wParam == 65)
+				UIValues.overlay_wireframe = !UIValues.overlay_wireframe;
 
-			if (!key_down && msg.wParam == 69)
-				editing_coating_quality = !editing_coating_quality;
+			if (!UIValues.key_down && msg.wParam == 69)
+				UIValues.editing_coating_quality = !UIValues.editing_coating_quality;
 
-			if (!key_down && msg.wParam == 81)
-				editing_aperture = true;
+			if (!UIValues.key_down && msg.wParam == 81)
+				UIValues.editing_aperture = true;
 
-			if (!key_down && msg.wParam == 82)
-				editing_no_blades = true;
+			if (!UIValues.key_down && msg.wParam == 82)
+				UIValues.editing_no_blades = true;
 
-			if (!key_down && msg.wParam == 87)
-				editing_spread = true;
+			if (!UIValues.key_down && msg.wParam == 87)
+				UIValues.editing_spread = true;
 
-			if (!key_down && msg.wParam == 32)
-				draw2d = !draw2d;
+			if (!UIValues.key_down && msg.wParam == 32)
+				UIValues.draw2d = !UIValues.draw2d;
 
-			if (!key_down && msg.wParam == 37)
+			if (!UIValues.key_down && msg.wParam == 37)
 				ghost_bounce_1 = std::max<int>(2, ghost_bounce_1 - 1);
 
-			if (!key_down && msg.wParam == 39)
-				ghost_bounce_1 = std::min<int>((int)LensDescription::lens_interface.size() - 2, ghost_bounce_1 + 1);
+			if (!UIValues.key_down && msg.wParam == 39)
+				ghost_bounce_1 = std::min<int>((int)LensDescription.lens_interface.size() - 2, ghost_bounce_1 + 1);
 
-			if (!key_down && msg.wParam == 40)
+			if (!UIValues.key_down && msg.wParam == 40)
 				ghost_bounce_2 = std::max<int>(1, ghost_bounce_2 - 1);
 
-			if (!key_down && msg.wParam == 38) {
-				ghost_bounce_2 = std::min<int>((int)LensDescription::lens_interface.size() - 2, ghost_bounce_2 + 1);
+			if (!UIValues.key_down && msg.wParam == 38) {
+				ghost_bounce_2 = std::min<int>((int)LensDescription.lens_interface.size() - 2, ghost_bounce_2 + 1);
 				ghost_bounce_2 = std::min<int>(ghost_bounce_1 - 2, ghost_bounce_2);
 			}
 		
 			ghost_bounce_1 = std::max<int>(ghost_bounce_2 + 2, ghost_bounce_1);
-			key_down = true;
+			UIValues.key_down = true;
 		}
 
 		if (msg.message == WM_KEYUP) {
-			key_down = false;
-			editing_aperture = false;
-			editing_no_blades = false;
-			editing_spread = false;
-			editing_coating_quality = false;
+			UIValues.key_down = false;
+			UIValues.editing_aperture = false;
+			UIValues.editing_no_blades = false;
+			UIValues.editing_spread = false;
+			UIValues.editing_coating_quality = false;
 		}
 
 		if (msg.message == WM_LBUTTONDOWN) {
-			left_mouse_down = true;
+			UIValues.left_mouse_down = true;
 		}
 
 		if (msg.message == WM_LBUTTONUP) {
-			left_mouse_down = false;
+			UIValues.left_mouse_down = false;
 		}
 
 		if (msg.message == WM_MOUSEMOVE) {
@@ -912,30 +915,30 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 			float nx = ((p.x / backbuffer_width) * 2.f - 1.f);
 			float ny = ((p.y / backbuffer_height) * 2.f - 1.f);
 
-			if (!key_down && left_mouse_down) {
-				x_dir = nx * 0.2f;
-				y_dir = ny * 0.2f;
+			if (!UIValues.key_down && UIValues.left_mouse_down) {
+				UIValues.x_dir = nx * 0.2f;
+				UIValues.y_dir = ny * 0.2f;
 			}
 
-			if (editing_aperture) {
-				aperture_opening = 5.f + ny * 5.f;
+			if (UIValues.editing_aperture) {
+				UIValues.aperture_opening = 5.f + ny * 5.f;
 				UpdateLensComponents();
 			}
 
-			if (editing_no_blades) {
-				number_of_blades = 10.f + ny * 5.f;
+			if (UIValues.editing_no_blades) {
+				UIValues.number_of_blades = 10.f + ny * 5.f;
 			}
 
-			if (editing_spread) {
+			if (UIValues.editing_spread) {
 				rays_spread = 5.f + ny * 5.f;
 			}
 
-			if (editing_coating_quality) {
+			if (UIValues.editing_coating_quality) {
 				coating_quality = 0.5f + ny;
 			}
 
-			if (editing_aperture || editing_no_blades)
-				aperture_needs_updating = true;
+			if (UIValues.editing_aperture || UIValues.editing_no_blades)
+				UIValues.aperture_needs_updating = true;
 		}
 
 		if( PeekMessage( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
@@ -1113,11 +1116,11 @@ LensShapes::RayBundleData CreateRayBundleData(int subdiv, int num_patches) {
 
 	int num_of_indices = (subdiv - 1) * (subdiv - 1) * num_patches * 6;
 	int num_of_vertices = (subdiv * subdiv) * num_patches;
-	void* vertex_data = malloc(sizeof(PS_INPUT) * num_of_vertices);
+	void* vertex_data = malloc(sizeof(PSInput) * num_of_vertices);
 	CSIndirectData group_count_info = { (unsigned)num_of_ghosts * num_groups, (unsigned)num_groups, 3 };
 
 	Buffers::CreateBuffer(&bundle_data.indices, num_of_indices, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
-	Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PS_INPUT), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
+	Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PSInput), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
 	Buffers::CreateBuffer(&bundle_data.cs_group_count_info, 1, sizeof(CSIndirectData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS, &group_count_info);
 
 	Buffers::CreateSRView(bundle_data.cs_vertices, &bundle_data.vertices_resource_view, num_of_vertices);
@@ -1291,11 +1294,11 @@ void DrawRectangle(ID3D11DeviceContext* context, LensShapes::Square& rectangle, 
 	context->UpdateSubresource(Buffers::instance_uniforms, 0, nullptr, &cb, 0, 0);
 	if (filled) {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
+		context->IASetVertexBuffers(0, 1, &rectangle.vertices, &D3dDefaults.stride, &D3dDefaults.offset);
 		context->Draw(6, 0);
 	} else {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-		context->IASetVertexBuffers(0, 1, &rectangle.lines, &stride, &offset);
+		context->IASetVertexBuffers(0, 1, &rectangle.lines, &D3dDefaults.stride, &D3dDefaults.offset);
 		context->Draw(5, 0);
 	}
 }
@@ -1308,7 +1311,7 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Square& rectan
 
 	context->RSSetState(States::rs_cull);
 
-	context->OMSetBlendState(States::bs_no_blend, blend_factor, sample_mask);
+	context->OMSetBlendState(States::bs_no_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 	context->OMSetDepthStencilState(States::dss_default, 0);
 	context->OMSetRenderTargets(1, &rt_view, depth_buffer_view);
 	context->ClearRenderTargetView(rt_view, XMVECTORF32{ 0, 0, 0, 0 });
@@ -1316,7 +1319,7 @@ void DrawFullscreenQuad(ID3D11DeviceContext* context, LensShapes::Square& rectan
 
 	context->IASetInputLayout(d3d_vertex_layout_2d);
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	context->IASetVertexBuffers(0, 1, &rectangle.vertices, &stride, &offset);
+	context->IASetVertexBuffers(0, 1, &rectangle.vertices, &D3dDefaults.stride, &D3dDefaults.offset);
 	context->IASetIndexBuffer(rectangle.indices, DXGI_FORMAT_R32_UINT, 0);
 
 	context->Draw(6, 0);
@@ -1330,11 +1333,11 @@ void DrawCircle(ID3D11DeviceContext* context, LensShapes::Circle& circle, XMFLOA
 	context->UpdateSubresource(Buffers::instance_uniforms, 0, nullptr, &cb, 0, 0);
 	if (filled) {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		context->IASetVertexBuffers(0, 1, &circle.triangles, &stride, &offset);
+		context->IASetVertexBuffers(0, 1, &circle.triangles, &D3dDefaults.stride, &D3dDefaults.offset);
 		context->Draw(num_vertices_per_cirlces, 0);
 	} else {
 		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-		context->IASetVertexBuffers(0, 1, &circle.lines, &stride, &offset);
+		context->IASetVertexBuffers(0, 1, &circle.lines, &D3dDefaults.stride, &D3dDefaults.offset);
 		context->Draw(num_points_per_cirlces, 0);
 	}
 }
@@ -1347,7 +1350,7 @@ void DrawFlat(LensInterface& right) {
 	XMFLOAT4 mask_placement2 = { mx, 1.f, mw * 1.01f, global_scale * right.sa };
 	XMFLOAT4 mask_placement3 = { mx + 0.0001f, 1.f, mw * 0.9f, global_scale * right.w };
 
-	d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+	d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 	d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
 	DrawRectangle(d3d_context, LensShapes::unit_square, flat_fill_color, mask_placement1, true);
 
@@ -1355,7 +1358,7 @@ void DrawFlat(LensInterface& right) {
 	DrawRectangle(d3d_context, LensShapes::unit_square, flat_fill_color, mask_placement2, true);
 
 	d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 1);
-	d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+	d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 	DrawRectangle(d3d_context, LensShapes::unit_square, flat_fill_color, mask_placement3, true);
 	DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement3, false);
 }
@@ -1367,7 +1370,7 @@ XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
 }
 
 XMFLOAT4 IntersectionColor(int i) {
-	float ior1 = LensDescription::lens_interface[i].n.x == 1.f ? LensDescription::lens_interface[i].n.z : LensDescription::lens_interface[i].n.x;
+	float ior1 = LensDescription.lens_interface[i].n.x == 1.f ? LensDescription.lens_interface[i].n.z : LensDescription.lens_interface[i].n.x;
 	return LensColor(ior1, intersection_color2, intersection_color3);
 }
 
@@ -1415,7 +1418,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		XMFLOAT4 left_placement = { lx, 1.f, lr, lr };
 
 		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement, true);
 
@@ -1425,17 +1428,17 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_decr, 2);
 		DrawCircle(d3d_context, LensShapes::unit_circle, fill_color, left_placement, true);
 
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 2);
 		DrawRectangle(d3d_context, LensShapes::unit_square, fill_color, mask_placement, true);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement2, false);
 
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement, true);
 
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 1);
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, left_placement, false);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, right_placement, false);
 	}
@@ -1462,14 +1465,14 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
 		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement, true);
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_incr, 1);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, left_placement, true);
 
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_incr, 2);
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		DrawCircle(d3d_context, LensShapes::unit_circle, fill_color, right_placement, true);
 
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 3);
@@ -1477,11 +1480,11 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 
 		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement, true);
 
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 1);
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, left_placement, false);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, right_placement, false);
 	}
@@ -1508,7 +1511,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		XMFLOAT4 right_placement = { rx, 1.f, rr, rr };
 
 		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
 		DrawRectangle(d3d_context, LensShapes::unit_square, fill_color, mask_placement, true);
 
@@ -1516,16 +1519,16 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 		DrawCircle(d3d_context, LensShapes::unit_circle, fill_color, left_placement, true);
 		DrawCircle(d3d_context, LensShapes::unit_circle, fill_color, right_placement, true);
 
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 1);
 		DrawRectangle(d3d_context, LensShapes::unit_square, fill_color, mask_placement, true);
 		DrawRectangle(d3d_context, LensShapes::unit_square, stroke_color, mask_placement2, false);
 
 		d3d_context->OMSetDepthStencilState(States::dss_fill, 1);
-		d3d_context->OMSetBlendState(States::bs_mask, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_mask, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		DrawRectangle(d3d_context, LensShapes::unit_square, fill_color, mask_placement, true);
 
-		d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 		d3d_context->OMSetDepthStencilState(States::dss_greater_or_equal_read, 1);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, left_placement, false);
 		DrawCircle(d3d_context, LensShapes::unit_circle, stroke_color, right_placement, false);
@@ -1536,22 +1539,22 @@ void DrawLensInterface() {
 
 	d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 	d3d_context->OMSetDepthStencilState(States::dss_default, 0);
-	d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+	d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 
 	int i = 0;
-	while (i < (int)LensDescription::lens_interface.size()) {
+	while (i < (int)LensDescription.lens_interface.size()) {
 		bool opaque1 = (i == ghost_bounce_1 - 1);
 		bool opaque2 = (i == ghost_bounce_2 - 1);
-		if (LensDescription::lens_interface[i].flat) {
-			DrawFlat(LensDescription::lens_interface[i]);
+		if (LensDescription.lens_interface[i].flat) {
+			DrawFlat(LensDescription.lens_interface[i]);
 			i += 1;
-		} else if (LensDescription::lens_interface[i].n.x == 1.f) {
+		} else if (LensDescription.lens_interface[i].n.x == 1.f) {
 			opaque1 = opaque1 || (i == ghost_bounce_1 - 2);
 			opaque2 = opaque2 || (i == ghost_bounce_2 - 2);
-			DrawLens(LensDescription::lens_interface[i], LensDescription::lens_interface[i + 1], opaque1 || opaque2);
+			DrawLens(LensDescription.lens_interface[i], LensDescription.lens_interface[i + 1], opaque1 || opaque2);
 			i += 2;
 		} else {
-			DrawLens(LensDescription::lens_interface[i - 1], LensDescription::lens_interface[i], opaque1 || opaque2);
+			DrawLens(LensDescription.lens_interface[i - 1], LensDescription.lens_interface[i], opaque1 || opaque2);
 			i += 1;
 		}
 	}
@@ -1572,10 +1575,10 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 	context->UpdateSubresource(Buffers::instance_uniforms, 0, nullptr, &cb, 0, 0);
 	
 	d3d_context->OMSetDepthStencilState(States::dss_default, 0);
-	d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+	d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-	context->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
+	context->IASetVertexBuffers(0, 1, &buffer, &D3dDefaults.stride, &D3dDefaults.offset);
 	context->Draw((int)intersections.size(), 0);
 }
 
@@ -1583,29 +1586,29 @@ void UpdateGlobals() {
 	time += speed;
 	
 	#if defined(DRAWLENSFLARE)
-		vec3 dir = normalize(vec3(-x_dir, y_dir, -1.f));
+		vec3 dir = normalize(vec3(-UIValues.x_dir, UIValues.y_dir, -1.f));
 	#else
-		vec3 dir = normalize(vec3(draw2d ? 0 : -x_dir, y_dir, -1.f));
+		vec3 dir = normalize(vec3(UIValues.draw2d ? 0 : -UIValues.x_dir, UIValues.y_dir, -1.f));
 
 		D3D11_BOX box = { 0, 0, 0, sizeof(GhostData), 1, 1 };
 		GhostData updated_ghostdata = { (float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0 };
 		d3d_context->UpdateSubresource(Buffers::ghostdata, 0, &box, &updated_ghostdata, 0, 0);
 	#endif
 
-	direction = XMFLOAT3(dir.x, dir.y, dir.z);
+	UIValues.direction = XMFLOAT3(dir.x, dir.y, dir.z);
 
 	GlobalData updated_globaldata = {
 		time,
 		rays_spread,
-		LensDescription::lens_interface[LensDescription::lens_interface.size() - 1].sa,
+		LensDescription.lens_interface[LensDescription.lens_interface.size() - 1].sa,
 
 		(float)aperture_id,
-		(float)LensDescription::lens_interface.size(),
+		(float)LensDescription.lens_interface.size(),
 		coating_quality,
 
 		XMFLOAT2(backbuffer_width, backbuffer_height),
-		XMFLOAT4(direction.x, direction.y, direction.z, aperture_resolution),
-		XMFLOAT4(aperture_opening, number_of_blades, starburst_resolution, 0.f)
+		XMFLOAT4(UIValues.direction.x, UIValues.direction.y, UIValues.direction.z, aperture_resolution),
+		XMFLOAT4(UIValues.aperture_opening, UIValues.number_of_blades, starburst_resolution, 0.f)
 	};
 
 	d3d_context->UpdateSubresource(Buffers::globaldata, 0, nullptr, &updated_globaldata, 0, 0);
@@ -1671,10 +1674,10 @@ void Render() {
 
 	UpdateGlobals();
 
-	if (aperture_needs_updating) {
+	if (UIValues.aperture_needs_updating) {
 		DrawAperture();
 		DrawStarBurst();
-		aperture_needs_updating = false;
+		UIValues.aperture_needs_updating = false;
 	}
 
 	#if defined(DRAWLENSFLARE)
@@ -1687,7 +1690,7 @@ void Render() {
 		d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
 		d3d_context->OMSetDepthStencilState(States::dss_default, 0);
-		d3d_context->OMSetBlendState(States::bs_add, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_add, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 
 		d3d_context->IASetIndexBuffer(LensShapes::ray_bundle_data.indices, DXGI_FORMAT_R32_UINT, 0);
 		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1723,11 +1726,11 @@ void Render() {
 		d3d_context->PSSetShader(Shaders::ps_starburst, nullptr, 0);
 		d3d_context->RSSetState(States::rs_cull);
 
-		d3d_context->OMSetBlendState(States::bs_add, blend_factor, sample_mask);
+		d3d_context->OMSetBlendState(States::bs_add, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 
 		d3d_context->IASetInputLayout(d3d_vertex_layout_2d);
 		d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-		d3d_context->IASetVertexBuffers(0, 1, &LensShapes::unit_square.vertices, &stride, &offset);
+		d3d_context->IASetVertexBuffers(0, 1, &LensShapes::unit_square.vertices, &D3dDefaults.stride, &D3dDefaults.offset);
 		d3d_context->IASetIndexBuffer(LensShapes::unit_square.indices, DXGI_FORMAT_R32_UINT, 0);
 
 		d3d_context->Draw(6, 0);
@@ -1749,14 +1752,14 @@ void Render() {
 		d3d_context->PSSetShaderResources(1, 1, Textures::null_sr_view);
 
 	#else
-		if(!draw2d) {
+		if(!UIValues.draw2d) {
 			d3d_context->IASetInputLayout(d3d_vertex_layout_3d);
 			d3d_context->IASetIndexBuffer(LensShapes::ray_bundle_data.indices, DXGI_FORMAT_R32_UINT, 0);
 			d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
 			d3d_context->OMSetDepthStencilState(States::dss_default, 0);
-			d3d_context->OMSetBlendState(States::bs_blend, blend_factor, sample_mask);
+			d3d_context->OMSetBlendState(States::bs_blend, D3dDefaults.blend_factor, D3dDefaults.sample_mask);
 			d3d_context->ClearRenderTargetView(Textures::backbuffer_rt_view, XMVECTORF32{ background_color2.x, background_color2.y, background_color2.z, background_color2.w });
 			d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -1785,7 +1788,7 @@ void Render() {
 			d3d_context->RSSetState(States::rs_no_cull);
 			d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
 
-			if (overlay_wireframe) {
+			if (UIValues.overlay_wireframe) {
 				d3d_context->RSSetState(States::rs_wireframe);
 				d3d_context->PSSetShader(Shaders::ps_lens_flare_wireframe, nullptr, 0);
 				d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
@@ -1812,18 +1815,18 @@ void Render() {
 			std::vector<std::vector<vec3>> intersections2(num_of_rays);
 			std::vector<std::vector<vec3>> intersections3(num_of_rays);
 
-			vec3 dir(direction.x, direction.y, direction.z);
+			vec3 dir(UIValues.direction.x, UIValues.direction.y, UIValues.direction.z);
 			for (int i = 0; i < num_of_rays; ++i) {
 				float pos = lerp(-1.f, 1.f, (float)i / (float)(num_of_rays - 1)) * rays_spread;
 
 				vec3 a1 = vec3(0.0f, pos, 400.f);
 				vec3 d1 = vec3(0.0f, 0.0f, -1.f);
 				Ray r1 = { a1, d1 };
-				Intersection i1 = testSPHERE(r1, LensDescription::lens_interface[0]);
+				Intersection i1 = testSPHERE(r1, LensDescription.lens_interface[0]);
 				vec3 a2 = i1.pos - dir;
 				Ray r = { a2, dir };
 
-				Trace(r, 1.f, LensDescription::lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
+				Trace(r, 1.f, LensDescription.lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
 			}
 
 			// Draw all rays
