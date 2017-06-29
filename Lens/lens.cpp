@@ -214,6 +214,7 @@ struct LensDescription {
 
 		{ 0.f,      5.f, 1.00000f,  true, 10.f,   5.f, 500 }
 	};
+
 	std::vector<LensInterface> lens_interface;
 	std::vector<GhostData> ghosts;
 
@@ -392,24 +393,22 @@ namespace Textures {
 	}
 
 	void InitTextures() {
-		ID3D11Texture2D* backBuffer = nullptr;
-		Win.d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
-		Win.d3d_device->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
+		ID3D11Texture2D* backbuffer = nullptr;
+		Win.d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backbuffer));
+		Win.d3d_device->CreateRenderTargetView(backbuffer, nullptr, &Textures::backbuffer_rt_view);
 
-		Textures::CreateTexture((int)App.backbuffer_width, (int)App.backbuffer_height,
-			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
-		Textures::CreateTexture((int)App.aperture_resolution, (int)App.aperture_resolution,
-			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
-		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution,
-			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
-		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution,
-			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
-		Textures::CreateDepthBuffer((int)App.backbuffer_width, (int)App.backbuffer_height,
-			Textures::depthbuffer, Textures::depthstencil_view);
-		Textures::CreateDepthBuffer((int)App.aperture_resolution, (int)App.aperture_resolution,
-			Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
-		Textures::CreateDepthBuffer((int)App.starburst_resolution, (int)App.starburst_resolution,
-			Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
+		CreateDepthBuffer((int)App.backbuffer_width, (int)App.backbuffer_height, Textures::depthbuffer, Textures::depthstencil_view);
+		CreateDepthBuffer((int)App.aperture_resolution, (int)App.aperture_resolution, Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
+		CreateDepthBuffer((int)App.starburst_resolution, (int)App.starburst_resolution, Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
+
+		CreateTexture((int)App.backbuffer_width, (int)App.backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+			Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
+		CreateTexture((int)App.aperture_resolution, (int)App.aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT,
+			Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
+		CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT,
+			Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
+		CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT,
+			Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
 
 		// Load the dust texture from the application
 		HBITMAP bitmap = LoadBitmap(Win.g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
@@ -422,8 +421,8 @@ namespace Textures {
 		resource_data.SysMemPitch = int(App.dust_resolution * 4);
 		resource_data.SysMemSlicePitch = size;
 
-		Textures::CreateTexture((int)App.dust_resolution, (int)App.dust_resolution,
-			DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
+		CreateTexture((int)App.dust_resolution, (int)App.dust_resolution, DXGI_FORMAT_R8G8B8A8_UNORM,
+			Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
 	}
 }
 
