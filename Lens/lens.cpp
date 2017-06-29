@@ -794,13 +794,13 @@ namespace Shapes {
 
 		unsigned int indices[] = { 2, 0, 1, 1, 3, 2 };
 
-		Square rectangle;
+		Square square;
 
-		Buffers::CreateBuffer(&rectangle.indices, 6, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
-		Buffers::CreateBuffer(&rectangle.vertices, 6, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &vertices[0]);
-		Buffers::CreateBuffer(&rectangle.lines, 5, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &lines[0]);
+		Buffers::CreateBuffer(&square.indices, 6, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
+		Buffers::CreateBuffer(&square.vertices, 6, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &vertices[0]);
+		Buffers::CreateBuffer(&square.lines, 5, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &lines[0]);
 
-		return rectangle;
+		return square;
 	}
 
 	Circle CreateUnitCircle() {
