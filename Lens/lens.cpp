@@ -11,8 +11,8 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-#define DRAW2D
-//#define DRAWLENSFLARE
+//#define DRAW2D
+#define DRAWLENSFLARE
 
 using namespace DirectX;
 
@@ -771,9 +771,9 @@ namespace Shapes {
 
 	Square CreateUnitSquare() {
 		float l = -1.f;
-		float r = 1.f;
+		float r =  1.f;
 		float b = -1.f / App.ratio;
-		float t = 1.f / App.ratio;
+		float t =  1.f / App.ratio;
 
 		SimpleVertex vertices[] = {
 			XMFLOAT3(l, b, 0.f),
