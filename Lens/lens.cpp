@@ -345,8 +345,6 @@ namespace Textures {
 	void CreateTexture(int width, int height, DXGI_FORMAT format, ID3D11Texture2D*& texture,
 		ID3D11ShaderResourceView*& sr_view, ID3D11RenderTargetView*& rt_view, D3D11_SUBRESOURCE_DATA* data = nullptr) {
 		
-		HRESULT hr;
-
 		D3D11_TEXTURE2D_DESC desc;
 		ZeroMemory(&desc, sizeof(desc));
 		desc.Width = width;
@@ -360,14 +358,14 @@ namespace Textures {
 		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
-		hr = Win.d3d_device->CreateTexture2D(&desc, data, &texture);
+		Win.d3d_device->CreateTexture2D(&desc, data, &texture);
 
 		D3D11_RENDER_TARGET_VIEW_DESC rt_view_desc;
 		ZeroMemory(&rt_view_desc, sizeof(rt_view_desc));
 		rt_view_desc.Format = rt_view_desc.Format;
 		rt_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		rt_view_desc.Texture2D.MipSlice = 0;
-		hr = Win.d3d_device->CreateRenderTargetView(texture, &rt_view_desc, &rt_view);
+		Win.d3d_device->CreateRenderTargetView(texture, &rt_view_desc, &rt_view);
 
 		D3D11_SHADER_RESOURCE_VIEW_DESC sr_view_desc;
 		ZeroMemory(&sr_view_desc, sizeof(sr_view_desc));
@@ -375,12 +373,10 @@ namespace Textures {
 		sr_view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 		sr_view_desc.Texture2D.MostDetailedMip = 0;
 		sr_view_desc.Texture2D.MipLevels = 1;
-		hr = Win.d3d_device->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
+		Win.d3d_device->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
 	}
 
 	void CreateDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
-		HRESULT hr;
-
 		// Create depth stencil texture
 		D3D11_TEXTURE2D_DESC desc;
 		ZeroMemory(&desc, sizeof(desc));
@@ -395,7 +391,7 @@ namespace Textures {
 		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
-		hr = Win.d3d_device->CreateTexture2D(&desc, nullptr, &buffer);
+		Win.d3d_device->CreateTexture2D(&desc, nullptr, &buffer);
 
 		// Create the depth stencil view
 		D3D11_DEPTH_STENCIL_VIEW_DESC view_desc;
@@ -403,7 +399,7 @@ namespace Textures {
 		view_desc.Format = desc.Format;
 		view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 		view_desc.Texture2D.MipSlice = 0;
-		hr = Win.d3d_device->CreateDepthStencilView(buffer, &view_desc, &buffer_view);
+		Win.d3d_device->CreateDepthStencilView(buffer, &view_desc, &buffer_view);
 	}
 
 	void InitTextures() {
