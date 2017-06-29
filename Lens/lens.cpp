@@ -15,6 +15,7 @@
 #define DRAWLENSFLARE
 
 using namespace DirectX;
+using namespace std;
 
 // ---------------------------------------------------------------------------------------------------------
 // Structs 
@@ -139,7 +140,7 @@ struct LensDescription {
 	const float Bf = 39.683f;
 	const int nikon_aperture_id = 14;
 
-	std::vector<PatentFormat> nikon_28_75mm = {
+	vector<PatentFormat> nikon_28_75mm = {
 		{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 530 },
 		{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 600 },
 
@@ -190,7 +191,7 @@ struct LensDescription {
 	// Angenieux Lens
 	const int angenieux_aperture_id = 7;
 
-	std::vector<PatentFormat> angenieux = {
+	vector<PatentFormat> angenieux = {
 		{ 164.13f,     10.99f, 1.67510f, false, 0.5f, 52.0f, 432 },
 		{ 559.20f,      0.23f, 1.00000f, false, 0.5f, 52.0f, 532 },
 
@@ -218,14 +219,14 @@ struct LensDescription {
 		{ 0.f,            5.f, 1.00000f,  true, 10.f,   5.f, 500 }
 	};
 
-	std::vector<LensInterface> lens_interface;
-	std::vector<GhostData> ghosts;
+	vector<LensInterface> lens_interface;
+	vector<GhostData> ghosts;
 
-	std::vector<PatentFormat> lens_components = nikon_28_75mm;
+	vector<PatentFormat> lens_components = nikon_28_75mm;
 	int aperture_id = nikon_aperture_id;
 	int num_of_ghosts = 352; // 27!/2*(27-2)!
 
-	//std::vector<PatentFormat> lens_components = angenieux;
+	//vector<PatentFormat> lens_components = angenieux;
 	//int aperture_id = angenieux_aperture_id;
 	//int num_of_ghosts = 92; // 14!/2*(14-2)!
 
@@ -446,7 +447,7 @@ struct Shaders {
 
 	ID3D11PixelShader*   ps_aperture;
 
-	HRESULT CompileShaderFromSource(std::string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
+	HRESULT CompileShaderFromSource(string shaderSource, LPCSTR szEntryPoint, LPCSTR szShaderModel, ID3DBlob** ppBlobOut) {
 		ID3DBlob* temp = nullptr;
 		HRESULT hr = D3DCompile(shaderSource.c_str(), shaderSource.length(), nullptr, nullptr, nullptr, szEntryPoint, szShaderModel, D3DCOMPILE_ENABLE_STRICTNESS, 0, ppBlobOut, &temp);
 		char* msg = temp ? (char*)temp : nullptr; msg;
@@ -474,10 +475,10 @@ struct Shaders {
 		Win.d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &ps_basic);	
 		blob->Release();
 
-		std::string aperture_id_string = std::to_string(Lens.aperture_id);
-		std::string num_groups_string = std::to_string(App.num_groups);
-		std::string num_threads_string = std::to_string(App.num_threads);
-		std::string patch_tesselation_string = std::to_string(App.patch_tesselation);
+		string aperture_id_string = to_string(Lens.aperture_id);
+		string num_groups_string = to_string(App.num_groups);
+		string num_threads_string = to_string(App.num_threads);
+		string patch_tesselation_string = to_string(App.patch_tesselation);
 
 		D3D_SHADER_MACRO lens_defines[] = {
 			"AP_IDX", aperture_id_string.c_str(),
@@ -532,8 +533,8 @@ struct Shaders {
 		blob->Release();
 
 		int butterfly_count = (int)(logf(App.aperture_resolution) / logf(2.0));
-		std::string resolution_string = std::to_string((int)App.aperture_resolution);
-		std::string butterfly_string = std::to_string(butterfly_count);
+		string resolution_string = to_string((int)App.aperture_resolution);
+		string butterfly_string = to_string(butterfly_count);
 		D3D_SHADER_MACRO fft_defines_row[] = {
 			"LENGTH", resolution_string.c_str(),
 			"BUTTERFLY_COUNT", butterfly_string.c_str(),
@@ -808,8 +809,8 @@ struct Shapes {
 	}
 
 	Circle CreateUnitCircle() {
-		std::vector<SimpleVertex> triangle_vertices;
-		std::vector<SimpleVertex> line_vertices;
+		vector<SimpleVertex> triangle_vertices;
+		vector<SimpleVertex> line_vertices;
 
 		triangle_vertices.resize(App.num_points_per_cirlces * 3);
 		for (int i = 0; i < App.num_points_per_cirlces - 1; i++) {
@@ -853,8 +854,8 @@ struct Shapes {
 		float b = -1.0f;
 		float t = 1.0f;
 
-		std::vector<SimpleVertex> vertices;
-		std::vector<int> indices;
+		vector<SimpleVertex> vertices;
+		vector<int> indices;
 
 		vertices.resize(subdiv * subdiv * num_patches);
 		for (int n = 0; n < num_patches; ++n) {
@@ -1254,12 +1255,12 @@ inline XMFLOAT3 PointToD3d(vec3& point) {
 	return XMFLOAT3(-(z - 1.f), y, x);
 }
 
-void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::vector<vec3>& intersections, int max_points, XMFLOAT4& color) {
+void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, vector<vec3>& intersections, int max_points, XMFLOAT4& color) {
 	InstanceUniforms cb;
 	cb.color = color;
 	cb.placement = XMFLOAT4(0.f, 0.f, 0.f, 0.f);
 
-	std::vector<XMFLOAT3> points(max_points);
+	vector<XMFLOAT3> points(max_points);
 	for (int i = 0; i < (int)intersections.size(); ++i) {
 		points[i] = (PointToD3d(intersections[i]));
 	}
@@ -1504,9 +1505,9 @@ void Render() {
 			Win.d3d_context->PSSetConstantBuffers(0, 1, &Buffers.instance_uniforms);
 
 			// Trace all rays
-			std::vector<std::vector<vec3>> intersections1(App.num_of_rays);
-			std::vector<std::vector<vec3>> intersections2(App.num_of_rays);
-			std::vector<std::vector<vec3>> intersections3(App.num_of_rays);
+			vector<vector<vec3>> intersections1(App.num_of_rays);
+			vector<vector<vec3>> intersections2(App.num_of_rays);
+			vector<vector<vec3>> intersections3(App.num_of_rays);
 
 			vec3 dir(UI.direction.x, UI.direction.y, UI.direction.z);
 			for (int i = 0; i < App.num_of_rays; ++i) {
@@ -1615,20 +1616,20 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 				UI.draw2d = !UI.draw2d;
 
 			if (!UI.key_down && msg.wParam == 37)
-				UI.ghost_bounce_1 = std::max<int>(2, UI.ghost_bounce_1 - 1);
+				UI.ghost_bounce_1 = max<int>(2, UI.ghost_bounce_1 - 1);
 
 			if (!UI.key_down && msg.wParam == 39)
-				UI.ghost_bounce_1 = std::min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_1 + 1);
+				UI.ghost_bounce_1 = min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_1 + 1);
 
 			if (!UI.key_down && msg.wParam == 40)
-				UI.ghost_bounce_2 = std::max<int>(1, UI.ghost_bounce_2 - 1);
+				UI.ghost_bounce_2 = max<int>(1, UI.ghost_bounce_2 - 1);
 
 			if (!UI.key_down && msg.wParam == 38) {
-				UI.ghost_bounce_2 = std::min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_2 + 1);
-				UI.ghost_bounce_2 = std::min<int>(UI.ghost_bounce_1 - 2, UI.ghost_bounce_2);
+				UI.ghost_bounce_2 = min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_2 + 1);
+				UI.ghost_bounce_2 = min<int>(UI.ghost_bounce_1 - 2, UI.ghost_bounce_2);
 			}
 
-			UI.ghost_bounce_1 = std::max<int>(UI.ghost_bounce_2 + 2, UI.ghost_bounce_1);
+			UI.ghost_bounce_1 = max<int>(UI.ghost_bounce_2 + 2, UI.ghost_bounce_1);
 			UI.key_down = true;
 		}
 
