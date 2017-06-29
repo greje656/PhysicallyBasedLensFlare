@@ -1362,7 +1362,6 @@ XMFLOAT4 IntersectionColor(int i) {
 }
 
 void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
-	
 	XMFLOAT4 fill_color = LensColor(right.n.x, ColorTheme.fill1, ColorTheme.fill2);
 	fill_color.w = opaque ? ColorTheme.alpha : fill_color.w;
 	
@@ -1523,7 +1522,6 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 }
 
 void DrawLensInterface() {
-
 	Win.d3d_context->ClearDepthStencilView(Textures::depthstencil_view, D3D11_CLEAR_STENCIL, 1.0f, 0);
 	Win.d3d_context->OMSetDepthStencilState(States::dss_default, 0);
 	Win.d3d_context->OMSetBlendState(States::bs_blend, Win.blend_factor, Win.sample_mask);
@@ -1658,7 +1656,6 @@ void DrawStarBurst() {
 // Render a frame
 //--------------------------------------------------------------------------------------
 void Render() {
-
 	UpdateGlobals();
 
 	if (UI.aperture_needs_updating) {
