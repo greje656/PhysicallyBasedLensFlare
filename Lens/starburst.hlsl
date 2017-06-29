@@ -62,6 +62,10 @@ float2 Rotate(float2 p, float a) {
 	return float2(x1, y1);
 }
 
+bool Clamped(float2 ndc) {
+	return ndc.x < -0.5 || ndc.x > 0.5 || ndc.y < -0.5 || ndc.y > 0.5;
+}
+
 StarbustInput VSStarburst(float4 pos : POSITION, uint id : SV_VertexID) {
 	StarbustInput result;
 
@@ -98,10 +102,6 @@ float4 PSStarburst(StarbustInput input) : SV_Target {
 	return float4(starburst, 1.f);
 }
 
-bool Clamped(float2 ndc) {
-	return ndc.x < -0.5 || ndc.x > 0.5 || ndc.y < -0.5 || ndc.y > 0.5;
-}
-
 float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 
 	float2 uv = pos.xy / starburst_resolution - 0.5;
@@ -132,7 +132,7 @@ float4 PSStarburstFromFFT(float4 pos : SV_POSITION ) : SV_Target {
 		float2 p1 = float2(r1, i1);
 		float2 p2 = float2(r2, i2);
 
-		float starburst = pow(length(p1), 2.f) * fft_scale * lerp(1.0f, 25.f, d);
+		float starburst = pow(length(p1), 2.f) * fft_scale * lerp(0.0f, 25.f, d);
 		float dust      = pow(length(p2), 2.f) * fft_scale * lerp(0.5f,  0.f, d);
 
 		float lambda = lerp(380.f, 700.f, n);

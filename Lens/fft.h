@@ -5,7 +5,7 @@
 
 using namespace DirectX;
 
-namespace FFT {
+struct FFT {
 	enum FFTTextures {
 		FFTTexture_Real0,
 		FFTTexture_Imaginary0,
@@ -94,4 +94,4 @@ namespace FFT {
 		pUAVs[0] = NULL; pUAVs[1] = NULL;
 		context->CSSetUnorderedAccessViews(0, 2, pUAVs, NULL);
 	}
-}
+} FFT;
