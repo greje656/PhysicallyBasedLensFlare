@@ -260,7 +260,7 @@ float GetArea(int2 pos, int offset) {
 	return isnan(area) ? 0.f : area;
 }
 
-PSInput getTraceResult(float2 ndc, float wavelength, int2 bounces){
+PSInput GetTraceResult(float2 ndc, float wavelength, int2 bounces){
 	float3 starting_pos = float3(ndc * spread, 1000.f);
 	
 	// Project all starting points in the entry lens
@@ -296,7 +296,7 @@ void CS(int3 gid : SV_GroupID, uint3 gtid : SV_GroupThreadID, uint gi : SV_Group
 	float wavelength = color_spectrum[gid.z] * NANO_METER;
 
 	int2 bounces = int2(ghostdata_buffer[ghostid].bounce1, ghostdata_buffer[ghostid].bounce2);
-	PSInput result = getTraceResult(ndc, wavelength, bounces);
+	PSInput result = GetTraceResult(ndc, wavelength, bounces);
 	
 	uint offset = PosToOffset(pos) + data_offset;
 	uav_buffer[offset].reflectance.a = 0;
