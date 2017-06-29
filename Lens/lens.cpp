@@ -61,35 +61,24 @@ struct CSIndirectData {
 typedef XMFLOAT3 SimpleVertex;
 typedef XMFLOAT4 GhostData;
 
+inline float Sign(float v) {
+	return v < 0.f ? -1.f : 1.f;
+}
+
+inline float Lerp(float a, float b, float l) {
+	return a * (1.f - l) + b * l;
+}
+
+inline XMFLOAT4 Lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
+	float x = Lerp(a.x, b.x, l);
+	float y = Lerp(a.y, b.y, l);
+	float z = Lerp(a.z, b.z, l);
+	float w = Lerp(a.w, b.w, l);
+	return{ x, y, z, w };
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Global Data
-
-namespace Shapes {
-	struct Square {
-		ID3D11Buffer* indices;
-		ID3D11Buffer* vertices;
-		ID3D11Buffer* lines;
-	};
-
-	struct Circle {
-		float x, y, r;
-		ID3D11Buffer* triangles;
-		ID3D11Buffer* lines;
-	};
-
-	struct RayBundleData {
-		int subdiv;
-		ID3D11Buffer* indices;
-		ID3D11Buffer* cs_vertices;
-		ID3D11Buffer* cs_group_count_info;
-		ID3D11ShaderResourceView* vertices_resource_view;
-		ID3D11UnorderedAccessView* ua_vertices_resource_view;
-	};
-
-	Square unit_square;
-	Circle unit_circle;
-	RayBundleData ray_bundle_data;
-}
 
 struct ColorTheme {
 	XMFLOAT4 NormalizeRGB(XMFLOAT4 c) {
@@ -407,23 +396,34 @@ namespace Textures {
 		Win.d3d_swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&backBuffer));
 		Win.d3d_device->CreateRenderTargetView(backBuffer, nullptr, &Textures::backbuffer_rt_view);
 
-		Textures::CreateTexture((int)App.backbuffer_width, (int)App.backbuffer_height, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
-		Textures::CreateTexture((int)App.aperture_resolution, (int)App.aperture_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
-		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
-		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution, DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
-		Textures::CreateDepthBuffer((int)App.backbuffer_width, (int)App.backbuffer_height, Textures::depthbuffer, Textures::depthstencil_view);
-		Textures::CreateDepthBuffer((int)App.aperture_resolution, (int)App.aperture_resolution, Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
-		Textures::CreateDepthBuffer((int)App.starburst_resolution, (int)App.starburst_resolution, Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
+		Textures::CreateTexture((int)App.backbuffer_width, (int)App.backbuffer_height,
+			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::hdr, Textures::hdr_sr_view, Textures::hdr_rt_view);
+		Textures::CreateTexture((int)App.aperture_resolution, (int)App.aperture_resolution,
+			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::aperture, Textures::aperture_sr_view, Textures::aperture_rt_view);
+		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution,
+			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst, Textures::starburst_sr_view, Textures::starburst_rt_view);
+		Textures::CreateTexture((int)App.starburst_resolution, (int)App.starburst_resolution,
+			DXGI_FORMAT_R16G16B16A16_FLOAT, Textures::starburst_filtered, Textures::starburst_filtered_sr_view, Textures::starburst_filtered_rt_view);
+		Textures::CreateDepthBuffer((int)App.backbuffer_width, (int)App.backbuffer_height,
+			Textures::depthbuffer, Textures::depthstencil_view);
+		Textures::CreateDepthBuffer((int)App.aperture_resolution, (int)App.aperture_resolution,
+			Textures::aperture_depthbuffer, Textures::aperture_depthbuffer_view);
+		Textures::CreateDepthBuffer((int)App.starburst_resolution, (int)App.starburst_resolution,
+			Textures::aperture_depthbuffer, Textures::starburst_depth_buffer_view);
 
+		// Load the dust texture from the application
 		HBITMAP bitmap = LoadBitmap(Win.g_hInst, MAKEINTRESOURCE(IDB_BITMAP1));
 		int size = int(App.dust_resolution * App.dust_resolution * 4);
 		void* bitmap_data = malloc(size);
 		GetBitmapBits(bitmap, size, bitmap_data);
+
 		D3D11_SUBRESOURCE_DATA resource_data;
 		resource_data.pSysMem = bitmap_data;
 		resource_data.SysMemPitch = int(App.dust_resolution * 4);
 		resource_data.SysMemSlicePitch = size;
-		Textures::CreateTexture((int)App.dust_resolution, (int)App.dust_resolution, DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
+
+		Textures::CreateTexture((int)App.dust_resolution, (int)App.dust_resolution,
+			DXGI_FORMAT_R8G8B8A8_UNORM, Textures::dust, Textures::dust_sr_view, Textures::dust_rt_view, &resource_data);
 	}
 }
 
@@ -748,6 +748,180 @@ namespace States {
 	}
 }
 
+namespace Shapes {
+	struct Square {
+		ID3D11Buffer* indices;
+		ID3D11Buffer* vertices;
+		ID3D11Buffer* lines;
+	};
+
+	struct Circle {
+		float x, y, r;
+		ID3D11Buffer* triangles;
+		ID3D11Buffer* lines;
+	};
+
+	struct RayBundle {
+		int subdiv;
+		ID3D11Buffer* indices;
+		ID3D11Buffer* cs_vertices;
+		ID3D11Buffer* cs_group_count_info;
+		ID3D11ShaderResourceView* vertices_resource_view;
+		ID3D11UnorderedAccessView* ua_vertices_resource_view;
+	};
+
+	Square CreateUnitSquare() {
+		float l = -1.f;
+		float r = 1.f;
+		float b = -1.f / App.ratio;
+		float t = 1.f / App.ratio;
+
+		SimpleVertex vertices[] = {
+			XMFLOAT3(l, b, 0.f),
+			XMFLOAT3(l, t, 0.f),
+			XMFLOAT3(r, t, 0.f),
+			XMFLOAT3(l, b, 0.f),
+			XMFLOAT3(r, b, 0.f),
+			XMFLOAT3(r, t, 0.f),
+		};
+
+		SimpleVertex lines[] = {
+			XMFLOAT3(l, b, 0.f),
+			XMFLOAT3(l, t, 0.f),
+			XMFLOAT3(r, t, 0.f),
+			XMFLOAT3(r, b, 0.f),
+			XMFLOAT3(l, b, 0.f),
+		};
+
+		unsigned int indices[] = { 2, 0, 1, 1, 3, 2 };
+
+		Square rectangle;
+
+		Buffers::CreateBuffer(&rectangle.indices, 6, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
+		Buffers::CreateBuffer(&rectangle.vertices, 6, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &vertices[0]);
+		Buffers::CreateBuffer(&rectangle.lines, 5, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &lines[0]);
+
+		return rectangle;
+	}
+
+	Circle CreateUnitCircle() {
+		std::vector<SimpleVertex> triangle_vertices;
+		std::vector<SimpleVertex> line_vertices;
+
+		triangle_vertices.resize(App.num_points_per_cirlces * 3);
+		for (int i = 0; i < App.num_points_per_cirlces - 1; i++) {
+
+			float t1 = (float)i / (float)(App.num_points_per_cirlces - 1);
+			float a1 = t1 * 2.f * PI;
+			float x1 = sin(a1);
+			float y1 = cos(a1) / App.ratio;
+
+			float t2 = (float)(i + 1) / (float)(App.num_points_per_cirlces - 1);
+			float a2 = t2 * 2.f * PI;
+			float x2 = sin(a2);
+			float y2 = cos(a2) / App.ratio;
+
+			SimpleVertex to_add1 = XMFLOAT3(x1, y1, 0.f);
+			SimpleVertex to_add2 = XMFLOAT3(x2, y2, 0.f);
+			SimpleVertex to_add3 = XMFLOAT3(0.f, 0.f, 0.f);
+
+			triangle_vertices[i * 3 + 0] = to_add1;
+			triangle_vertices[i * 3 + 1] = to_add2;
+			triangle_vertices[i * 3 + 2] = to_add3;
+
+			line_vertices.push_back(to_add1);
+		}
+
+		SimpleVertex to_add = XMFLOAT3(0.f, 1.f / App.ratio, 0.f);
+		line_vertices.push_back(to_add);
+
+		Circle circle = { 0.f, 0.f, 1.f };
+
+		Buffers::CreateBuffer(&circle.triangles, App.num_vertices_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &triangle_vertices[0]);
+		Buffers::CreateBuffer(&circle.lines, App.num_points_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &line_vertices[0]);
+
+		return circle;
+	}
+
+	RayBundle CreateRayBundle(int subdiv, int num_patches) {
+
+		float l = -1.0f;
+		float r = 1.0f;
+		float b = -1.0f;
+		float t = 1.0f;
+
+		std::vector<SimpleVertex> vertices;
+		std::vector<int> indices;
+
+		vertices.resize(subdiv * subdiv * num_patches);
+		for (int n = 0; n < num_patches; ++n) {
+			for (int y = 0; y < subdiv; ++y) {
+				float ny = (float)y / (float)(subdiv - 1);
+				for (int x = 0; x < subdiv; ++x) {
+					float nx = (float)x / (float)(subdiv - 1);
+					float x_pos = Lerp(l, r, nx);
+					float y_pos = Lerp(t, b, ny);
+					vertices[n * subdiv * subdiv + y * subdiv + x] = { XMFLOAT3(x_pos, y_pos, 0.f) };
+				}
+			}
+		}
+
+		int current_corner = 0;
+		int num_indices_per_patch = (subdiv - 1) * (subdiv - 1) * 6;
+		indices.resize(num_indices_per_patch * num_patches);
+		for (int n = 0; n < num_patches; ++n) {
+			for (int y = 0; y < (subdiv - 1); ++y) {
+				for (int x = 0; x < (subdiv - 1); ++x) {
+					int i = (y * (subdiv - 1) + x) * 6 + num_indices_per_patch * n;
+
+					int i1 = current_corner;
+					int i2 = i1 + 1;
+					int i3 = i1 + subdiv;
+					int i4 = i2 + subdiv;
+
+					indices[i + 0] = i3;
+					indices[i + 1] = i1;
+					indices[i + 2] = i2;
+
+					indices[i + 3] = i2;
+					indices[i + 4] = i4;
+					indices[i + 5] = i3;
+
+					current_corner++;
+				}
+				current_corner++;
+			}
+		}
+
+		RayBundle bundle_data;
+		bundle_data.subdiv = subdiv;
+
+		int num_of_indices = (subdiv - 1) * (subdiv - 1) * num_patches * 6;
+		int num_of_vertices = (subdiv * subdiv) * num_patches;
+		void* vertex_data = malloc(sizeof(PSInput) * num_of_vertices);
+		CSIndirectData group_count_info = { (unsigned)Lens.num_of_ghosts * App.num_groups, (unsigned)App.num_groups, 3 };
+
+		Buffers::CreateBuffer(&bundle_data.indices, num_of_indices, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
+		Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PSInput), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
+		Buffers::CreateBuffer(&bundle_data.cs_group_count_info, 1, sizeof(CSIndirectData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS, &group_count_info);
+
+		Buffers::CreateSRView(bundle_data.cs_vertices, &bundle_data.vertices_resource_view, num_of_vertices);
+		Buffers::CreateUAView(bundle_data.cs_vertices, &bundle_data.ua_vertices_resource_view, num_of_vertices);
+
+		return bundle_data;
+	}
+
+	Square unit_square;
+	Circle unit_circle;
+	RayBundle ray_bundle;
+
+	void InitShapes() {
+		unit_square = CreateUnitSquare();
+		unit_circle = CreateUnitCircle();
+		ray_bundle = CreateRayBundle(App.patch_tesselation, Lens.num_of_ghosts);
+	}
+}
+
 void UpdateLensComponents() {
 	Lens.lens_interface[Lens.aperture_id].sa = UI.aperture_opening;
 	LensInterface aperture_component = Lens.lens_interface[Lens.aperture_id];
@@ -805,41 +979,19 @@ inline XMFLOAT3 PointToD3d(vec3& point) {
 	return XMFLOAT3(-(z - 1.f), y, x);
 }
 
-inline float Sign(float v) {
-	return v < 0.f ? -1.f : 1.f;
-}
-
-inline float Lerp(float a, float b, float l) {
-	return a * (1.f - l) + b * l;
-}
-
-XMFLOAT4 Lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
-	float x = Lerp(a.x, b.x, l);
-	float y = Lerp(a.y, b.y, l);
-	float z = Lerp(a.z, b.z, l);
-	float w = Lerp(a.w, b.w, l);
-	return{ x, y, z, w };
-}
-
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
 HRESULT InitResources();
 void Render();
+
 int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow ) {
-	UNREFERENCED_PARAMETER( hPrevInstance );
-	UNREFERENCED_PARAMETER( lpCmdLine );
+	UNREFERENCED_PARAMETER(hPrevInstance);
+	UNREFERENCED_PARAMETER(lpCmdLine);
 
-	if( FAILED( InitWindow( hInstance, nCmdShow ) ) )
-		return 0;
-
-	if (FAILED(InitDevice())) {
-		return 0;
-	}
-
-	if (FAILED(InitResources())) {
-		return 0;
-	}
+	InitWindow(hInstance, nCmdShow);
+	InitDevice();
+	InitResources();
 
 	// Main message loop
 	MSG msg = {0};
@@ -943,191 +1095,42 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	return ( int )msg.wParam;
 }
 
-
-//--------------------------------------------------------------------------------------
-// Register class and create window
-//--------------------------------------------------------------------------------------
-HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow ) {
+HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow) {
 	// Register class
 	WNDCLASSEX wcex;
-	wcex.cbSize = sizeof( WNDCLASSEX );
+	wcex.cbSize = sizeof(WNDCLASSEX);
 	wcex.style = CS_HREDRAW | CS_VREDRAW;
 	wcex.lpfnWndProc = WndProc;
 	wcex.cbClsExtra = 0;
 	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
-	wcex.hIcon = LoadIcon( hInstance, ( LPCTSTR )IDI_TUTORIAL1 );
-	wcex.hCursor = LoadCursor( nullptr, IDC_ARROW );
-	wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
+	wcex.hIcon = LoadIcon(hInstance, (LPCTSTR)IDI_TUTORIAL1);
+	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = nullptr;
 	wcex.lpszClassName = L"LensClass";
-	wcex.hIconSm = LoadIcon( wcex.hInstance, ( LPCTSTR )IDI_TUTORIAL1 );
-	if( !RegisterClassEx( &wcex ) )
+	wcex.hIconSm = LoadIcon(wcex.hInstance, (LPCTSTR)IDI_TUTORIAL1);
+	
+	if(!RegisterClassEx(&wcex))
 		return E_FAIL;
 
 	// Create window
 	Win.g_hInst = hInstance;
 	RECT rc = { 0, 0, (LONG)App.backbuffer_width, (LONG)App.backbuffer_height };
-	AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-	Win.g_hWnd = CreateWindow( L"LensClass", L"Lens Interface", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-							CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr );
+	AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+	Win.g_hWnd = CreateWindow(L"LensClass", L"Lens Interface", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+							CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr);
 
-	ShowWindow( Win.g_hWnd, nCmdShow );
+	ShowWindow(Win.g_hWnd, nCmdShow);
 
 	return S_OK;
 }
 
-Shapes::Square CreateUnitSquare() {
-
-	float l = -1.f;
-	float r =  1.f;
-	float b = -1.f / App.ratio;
-	float t =  1.f / App.ratio;
-
-	SimpleVertex vertices[] = {
-		XMFLOAT3(l, b, 0.f),
-		XMFLOAT3(l, t, 0.f),
-		XMFLOAT3(r, t, 0.f),
-		XMFLOAT3(l, b, 0.f),
-		XMFLOAT3(r, b, 0.f),
-		XMFLOAT3(r, t, 0.f),
-	};
-
-	SimpleVertex lines[] = {
-		XMFLOAT3(l, b, 0.f),
-		XMFLOAT3(l, t, 0.f),
-		XMFLOAT3(r, t, 0.f),
-		XMFLOAT3(r, b, 0.f),
-		XMFLOAT3(l, b, 0.f),
-	};
-
-	unsigned int indices[] = { 2, 0, 1, 1, 3, 2 };
-
-	Shapes::Square rectangle;
-
-	Buffers::CreateBuffer(&rectangle.indices, 6, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
-	Buffers::CreateBuffer(&rectangle.vertices, 6, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &vertices[0]);
-	Buffers::CreateBuffer(&rectangle.lines, 5, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &lines[0]);
-
-	return rectangle;
-}
-
-Shapes::Circle CreateUnitCircle() {
-
-	std::vector<SimpleVertex> triangle_vertices;
-	std::vector<SimpleVertex> line_vertices;
-
-	triangle_vertices.resize(App.num_points_per_cirlces * 3);
-	for (int i = 0; i < App.num_points_per_cirlces - 1; i++) {
-
-		float t1 = (float)i / (float)(App.num_points_per_cirlces - 1);
-		float a1 = t1 * 2.f * PI;
-		float x1 = sin(a1);
-		float y1 = cos(a1) / App.ratio;
-
-		float t2 = (float)(i + 1) / (float)(App.num_points_per_cirlces - 1);
-		float a2 = t2 * 2.f * PI;
-		float x2 = sin(a2);
-		float y2 = cos(a2) / App.ratio;
-
-		SimpleVertex to_add1 = XMFLOAT3(x1, y1, 0.f);
-		SimpleVertex to_add2 = XMFLOAT3(x2, y2, 0.f);
-		SimpleVertex to_add3 = XMFLOAT3(0.f, 0.f, 0.f);
-
-		triangle_vertices[i * 3 + 0] = to_add1;
-		triangle_vertices[i * 3 + 1] = to_add2;
-		triangle_vertices[i * 3 + 2] = to_add3;
-
-		line_vertices.push_back(to_add1);
-	}
-
-	SimpleVertex to_add = XMFLOAT3(0.f, 1.f / App.ratio, 0.f);
-	line_vertices.push_back(to_add);
-
-	Shapes::Circle circle = { 0.f, 0.f, 1.f };
-
-	Buffers::CreateBuffer(&circle.triangles, App.num_vertices_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &triangle_vertices[0]);
-	Buffers::CreateBuffer(&circle.lines, App.num_points_per_cirlces, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &line_vertices[0]);
-
-	return circle;
-}
-
-Shapes::RayBundleData CreateRayBundleData(int subdiv, int num_patches) {
-
-	float l = -1.0f;
-	float r =  1.0f;
-	float b = -1.0f;
-	float t =  1.0f;
-
-	std::vector<SimpleVertex> vertices;
-	std::vector<int> indices;
-
-	vertices.resize(subdiv * subdiv * num_patches);
-	for (int n = 0; n < num_patches; ++n) {
-		for (int y = 0; y < subdiv; ++y) {
-			float ny = (float)y / (float)(subdiv - 1);
-			for (int x = 0; x < subdiv; ++x) {
-				float nx = (float)x / (float)(subdiv - 1);
-				float x_pos = Lerp(l, r, nx);
-				float y_pos = Lerp(t, b, ny);
-				vertices[n * subdiv * subdiv + y * subdiv + x] = { XMFLOAT3(x_pos, y_pos, 0.f) };
-			}
-		}
-	}
-
-	int current_corner = 0;
-	int num_indices_per_patch = (subdiv - 1) * (subdiv - 1) * 6;
-	indices.resize(num_indices_per_patch * num_patches);
-	for (int n = 0; n < num_patches; ++n) {
-		for (int y = 0; y < (subdiv - 1); ++y) {
-			for (int x = 0; x < (subdiv - 1); ++x) {
-				int i = (y * (subdiv - 1) + x) * 6 + num_indices_per_patch * n;
-
-				int i1 = current_corner;
-				int i2 = i1 + 1;
-				int i3 = i1 + subdiv;
-				int i4 = i2 + subdiv;
-
-				indices[i + 0] = i3;
-				indices[i + 1] = i1;
-				indices[i + 2] = i2;
-
-				indices[i + 3] = i2;
-				indices[i + 4] = i4;
-				indices[i + 5] = i3;
-
-				current_corner++;
-			}
-			current_corner++;
-		}
-	}
-
-	Shapes::RayBundleData bundle_data;
-	bundle_data.subdiv = subdiv;
-
-	int num_of_indices = (subdiv - 1) * (subdiv - 1) * num_patches * 6;
-	int num_of_vertices = (subdiv * subdiv) * num_patches;
-	void* vertex_data = malloc(sizeof(PSInput) * num_of_vertices);
-	CSIndirectData group_count_info = { (unsigned)Lens.num_of_ghosts * App.num_groups, (unsigned)App.num_groups, 3 };
-
-	Buffers::CreateBuffer(&bundle_data.indices, num_of_indices, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
-	Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PSInput), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
-	Buffers::CreateBuffer(&bundle_data.cs_group_count_info, 1, sizeof(CSIndirectData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS, &group_count_info);
-
-	Buffers::CreateSRView(bundle_data.cs_vertices, &bundle_data.vertices_resource_view, num_of_vertices);
-	Buffers::CreateUAView(bundle_data.cs_vertices, &bundle_data.ua_vertices_resource_view, num_of_vertices);
-	
-	return bundle_data;
-}
-//--------------------------------------------------------------------------------------
-// Create Direct3D device and swap chain
-//--------------------------------------------------------------------------------------
-HRESULT InitDevice()
-{
+HRESULT InitDevice() {
 	HRESULT hr = S_OK;
 
 	RECT rc;
-	GetClientRect( Win.g_hWnd, &rc );
+	GetClientRect(Win.g_hWnd, &rc);
 	UINT width = rc.right - rc.left;
 	UINT height = rc.bottom - rc.top;
 
@@ -1142,7 +1145,7 @@ HRESULT InitDevice()
 		D3D_DRIVER_TYPE_REFERENCE,
 	};
 
-	UINT numDriverTypes = ARRAYSIZE( driverTypes );
+	UINT numDriverTypes = ARRAYSIZE(driverTypes);
 
 	D3D_FEATURE_LEVEL featureLevels[] = {
 		D3D_FEATURE_LEVEL_11_1,
@@ -1151,17 +1154,17 @@ HRESULT InitDevice()
 		D3D_FEATURE_LEVEL_10_0,
 	};
 
-	UINT numFeatureLevels = ARRAYSIZE( featureLevels );
+	UINT numFeatureLevels = ARRAYSIZE(featureLevels);
 
-	for( UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++ ) {
+	for(UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++) {
 		Win.d3d_driver_type = driverTypes[driverTypeIndex];
-		hr = D3D11CreateDevice( nullptr, Win.d3d_driver_type, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
-								D3D11_SDK_VERSION, &Win.d3d_device, &Win.d3d_feature_level, &Win.d3d_context );
+		hr = D3D11CreateDevice(nullptr, Win.d3d_driver_type, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
+								D3D11_SDK_VERSION, &Win.d3d_device, &Win.d3d_feature_level, &Win.d3d_context);
 
-		if ( hr == E_INVALIDARG ) {
+		if (hr == E_INVALIDARG) {
 			// DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so we need to retry without it
-			hr = D3D11CreateDevice( nullptr, Win.d3d_driver_type, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1,
-									D3D11_SDK_VERSION, &Win.d3d_device, &Win.d3d_feature_level, &Win.d3d_context );
+			hr = D3D11CreateDevice(nullptr, Win.d3d_driver_type, nullptr, createDeviceFlags, &featureLevels[1], numFeatureLevels - 1,
+									D3D11_SDK_VERSION, &Win.d3d_device, &Win.d3d_feature_level, &Win.d3d_context);
 		}
 
 		if(SUCCEEDED(hr))
@@ -1180,7 +1183,7 @@ HRESULT InitDevice()
 	// Create swap chain
 	IDXGIFactory2* dxgiFactory2 = nullptr;
 	hr = dxgiFactory->QueryInterface( __uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2) );
-	if ( dxgiFactory2 ) {
+	if (dxgiFactory2) {
 		// DirectX 11.1 or later
 		hr = Win.d3d_device->QueryInterface( __uuidof(ID3D11Device1), reinterpret_cast<void**>(&Win.d3d_device1) );
 		if (SUCCEEDED(hr)) {
@@ -1247,23 +1250,17 @@ HRESULT InitResources() {
 	Shaders::InitShaders();
 	Buffers::InitBuffers();
 	States::InitStates();
+	Shapes::InitShapes();
 	FFT::InitFFTTetxtures(Win.d3d_device, (int)App.aperture_resolution);
-
-	Shapes::unit_circle = CreateUnitCircle();
-	Shapes::unit_square = CreateUnitSquare();
-	Shapes::ray_bundle_data = CreateRayBundleData(App.patch_tesselation, Lens.num_of_ghosts);
 
 	return S_OK;
 }
 
-//--------------------------------------------------------------------------------------
-// Called every App.time the application receives a message
-//--------------------------------------------------------------------------------------
-LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam ) {
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	PAINTSTRUCT ps;
 	HDC hdc;
 
-	switch( message ) {
+	switch(message) {
 		case WM_PAINT:
 			hdc = BeginPaint( hWnd, &ps );
 			EndPaint( hWnd, &ps );
@@ -1683,7 +1680,7 @@ void Render() {
 		Win.d3d_context->OMSetDepthStencilState(States::dss_default, 0);
 		Win.d3d_context->OMSetBlendState(States::bs_add, Win.blend_factor, Win.sample_mask);
 
-		Win.d3d_context->IASetIndexBuffer(Shapes::ray_bundle_data.indices, DXGI_FORMAT_R32_UINT, 0);
+		Win.d3d_context->IASetIndexBuffer(Shapes::ray_bundle.indices, DXGI_FORMAT_R32_UINT, 0);
 		Win.d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		Win.d3d_context->VSSetShader(Shaders::vs_lens_flare, nullptr, 0);
@@ -1698,15 +1695,15 @@ void Render() {
 		Win.d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globaldata);
 
 		// Ray march
-		Win.d3d_context->CSSetUnorderedAccessViews(0, 1, &Shapes::ray_bundle_data.ua_vertices_resource_view, nullptr);
+		Win.d3d_context->CSSetUnorderedAccessViews(0, 1, &Shapes::ray_bundle.ua_vertices_resource_view, nullptr);
 		Win.d3d_context->CSSetUnorderedAccessViews(1, 1, &Buffers::lensInterface_view, nullptr);
 		Win.d3d_context->CSSetUnorderedAccessViews(2, 1, &Buffers::ghostdata_view, nullptr);
-		Win.d3d_context->DispatchIndirect(Shapes::ray_bundle_data.cs_group_count_info, 0);
+		Win.d3d_context->DispatchIndirect(Shapes::ray_bundle.cs_group_count_info, 0);
 		Win.d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 		Win.d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
 		// Draw Ghosts
-		Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle_data.vertices_resource_view);
+		Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle.vertices_resource_view);
 		Win.d3d_context->DrawIndexedInstanced(App.num_vertices_per_bundle * 3 * 2, Lens.num_of_ghosts, 0, 0, 0);
 		Win.d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
@@ -1745,7 +1742,7 @@ void Render() {
 	#else
 		if(!UI.draw2d) {
 			Win.d3d_context->IASetInputLayout(Win.d3d_vertex_layout_3d);
-			Win.d3d_context->IASetIndexBuffer(Shapes::ray_bundle_data.indices, DXGI_FORMAT_R32_UINT, 0);
+			Win.d3d_context->IASetIndexBuffer(Shapes::ray_bundle.indices, DXGI_FORMAT_R32_UINT, 0);
 			Win.d3d_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			Win.d3d_context->OMSetRenderTargets(1, &Textures::backbuffer_rt_view, Textures::depthstencil_view);
@@ -1757,7 +1754,7 @@ void Render() {
 			Win.d3d_context->CSSetShader(Shaders::cs_lens_flare, nullptr, 0);
 			Win.d3d_context->CSSetConstantBuffers(1, 1, &Buffers::globaldata);
 		
-			Win.d3d_context->CSSetUnorderedAccessViews(0, 1, &Shapes::ray_bundle_data.ua_vertices_resource_view, nullptr);
+			Win.d3d_context->CSSetUnorderedAccessViews(0, 1, &Shapes::ray_bundle.ua_vertices_resource_view, nullptr);
 			Win.d3d_context->CSSetUnorderedAccessViews(1, 1, &Buffers::lensInterface_view, nullptr);
 			Win.d3d_context->CSSetUnorderedAccessViews(2, 1, &Buffers::ghostdata_view, nullptr);
 
@@ -1775,7 +1772,7 @@ void Render() {
 			Win.d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
 			// Draw
-			Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle_data.vertices_resource_view);
+			Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle.vertices_resource_view);
 			Win.d3d_context->RSSetState(States::rs_no_cull);
 			Win.d3d_context->DrawIndexed(App.num_vertices_per_bundle * 3 * 2, 0, 0);
 
