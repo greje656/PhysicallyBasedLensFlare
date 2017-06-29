@@ -11,10 +11,13 @@
 #include "resource.h"
 #include "ray_trace.h"
 
-//#define DRAW2D
-#define DRAWLENSFLARE
+#define DRAW2D
+//#define DRAWLENSFLARE
 
 using namespace DirectX;
+
+// ---------------------------------------------------------------------------------------------------------
+// Structs 
 
 struct PatentFormat {
 	float r;
@@ -58,18 +61,21 @@ struct CSIndirectData {
 typedef XMFLOAT3 SimpleVertex;
 typedef XMFLOAT4 GhostData;
 
+// ---------------------------------------------------------------------------------------------------------
+// Global Data
+
 namespace Shapes {
 	struct Square {
 		ID3D11Buffer* indices;
 		ID3D11Buffer* vertices;
 		ID3D11Buffer* lines;
-	} unit_square;
+	};
 
 	struct Circle {
 		float x, y, r;
 		ID3D11Buffer* triangles;
 		ID3D11Buffer* lines;
-	} unit_circle;
+	};
 
 	struct RayBundleData {
 		int subdiv;
@@ -78,13 +84,12 @@ namespace Shapes {
 		ID3D11Buffer* cs_group_count_info;
 		ID3D11ShaderResourceView* vertices_resource_view;
 		ID3D11UnorderedAccessView* ua_vertices_resource_view;
-	} ray_bundle_data;
-}
+	};
 
-struct LensDescription {
-	std::vector<LensInterface> lens_interface;
-	std::vector<GhostData> ghosts;
-} LensDescription;
+	Square unit_square;
+	Circle unit_circle;
+	RayBundleData ray_bundle_data;
+}
 
 struct ColorTheme {
 	XMFLOAT4 NormalizeRGB(XMFLOAT4 c) {
@@ -132,16 +137,17 @@ struct UI {
 	bool draw2d = true;
 } UI;
 
-namespace nikon_28_75mm {
+struct LensDescription {
+	// Nikon Lens
 	const float d6 = 53.142f;
 	const float d10 = 7.063f;
 	const float d14 = 1.532f;
 	const float dAp = 2.800f;
 	const float d20 = 16.889f;
 	const float Bf = 39.683f;
-	const int aperture_id = 14;
+	const int nikon_aperture_id = 14;
 
-	std::vector<PatentFormat> lens_components = {
+	std::vector<PatentFormat> nikon_28_75mm = {
 		{    72.747f,  2.300f, 1.60300f, false, 0.2f, 29.0f, 530 },
 		{    37.000f, 13.000f, 1.00000f, false, 0.2f, 29.0f, 600 },
 
@@ -188,53 +194,56 @@ namespace nikon_28_75mm {
 
 		{        0.f,     5.f, 1.00000f,  true, 10.f,  10.f, 500 }
 	};
-}
 
-namespace angenieux {
-	const int aperture_id = 7;
-	std::vector<PatentFormat> lens_components = {		
-		{   164.13f,   10.99f, 1.67510f, false, 0.5f, 52.0f, 432 },
-		{   559.20f,    0.23f, 1.00000f, false, 0.5f, 52.0f, 532 },
+	// Angenieux Lens
+	const int angenieux_aperture_id = 7;
 
-		{   100.12f,   11.45f, 1.66890f, false, 0.5f, 48.0f, 382 },
-		{   213.54f,    0.23f, 1.00000f, false, 0.5f, 48.0f, 422 },
-		
-		{    58.04f,   22.95f, 1.69131f, false, 0.5f, 36.0f, 572 },
+	std::vector<PatentFormat> angenieux = {
+		{ 164.13f,   10.99f, 1.67510f, false, 0.5f, 52.0f, 432 },
+		{ 559.20f,    0.23f, 1.00000f, false, 0.5f, 52.0f, 532 },
 
-		{  2551.10f,    2.58f, 1.67510f, false, 0.5f, 42.0f, 612 },
-		{    32.39f,   30.66f, 1.00000f, false, 0.3f, 36.0f, 732 },
-		
-		{      0.0f,   10.00f, 1.00000f, true,  25.f, UI.aperture_opening, 440 },
+		{ 100.12f,   11.45f, 1.66890f, false, 0.5f, 48.0f, 382 },
+		{ 213.54f,    0.23f, 1.00000f, false, 0.5f, 48.0f, 422 },
 
-		{   -40.42f,    2.74f, 1.69920f, false, 1.5f, 13.0f, 602 },
+		{ 58.04f,   22.95f, 1.69131f, false, 0.5f, 36.0f, 572 },
 
-		{   192.98f,   27.92f, 1.62040f, false, 4.0f, 36.0f, 482 },
-		{   -55.53f,    0.23f, 1.00000f, false, 0.5f, 36.0f, 662 },
+		{ 2551.10f,    2.58f, 1.67510f, false, 0.5f, 42.0f, 612 },
+		{ 32.39f,   30.66f, 1.00000f, false, 0.3f, 36.0f, 732 },
 
-		{   192.98f,    7.98f, 1.69131f, false, 0.5f, 35.0f, 332 },
-		{  -225.30f,    0.23f, 1.00000f, false, 0.5f, 35.0f, 412 },
+		{ 0.0f,   10.00f, 1.00000f, true,  25.f, UI.aperture_opening, 440 },
 
-		{   175.09f,    8.48f, 1.69130f, false, 0.5f, 35.0f, 532 },
-		{  -203.55f,     40.f, 1.00000f, false, 0.5f, 35.0f, 632 },
+		{ -40.42f,    2.74f, 1.69920f, false, 1.5f, 13.0f, 602 },
 
-		{       0.f,      5.f, 1.00000f,  true, 10.f,   5.f, 500 }
+		{ 192.98f,   27.92f, 1.62040f, false, 4.0f, 36.0f, 482 },
+		{ -55.53f,    0.23f, 1.00000f, false, 0.5f, 36.0f, 662 },
+
+		{ 192.98f,    7.98f, 1.69131f, false, 0.5f, 35.0f, 332 },
+		{ -225.30f,    0.23f, 1.00000f, false, 0.5f, 35.0f, 412 },
+
+		{ 175.09f,    8.48f, 1.69130f, false, 0.5f, 35.0f, 532 },
+		{ -203.55f,     40.f, 1.00000f, false, 0.5f, 35.0f, 632 },
+
+		{ 0.f,      5.f, 1.00000f,  true, 10.f,   5.f, 500 }
 	};
-}
+	std::vector<LensInterface> lens_interface;
+	std::vector<GhostData> ghosts;
 
-std::vector<PatentFormat> lens_components = nikon_28_75mm::lens_components;
-int aperture_id = nikon_28_75mm::aperture_id;
-int num_of_ghosts = 352; // 27!/2*(27-2)!
-//std::vector<PatentFormat> lens_components = angenieux::lens_components;
-//int aperture_id = angenieux::aperture_id;
-//int num_of_ghosts = 92; // 14!/2*(14-2)!
+	std::vector<PatentFormat> lens_components = nikon_28_75mm;
+	int aperture_id = nikon_aperture_id;
+	int num_of_ghosts = 352; // 27!/2*(27-2)!
 
-int num_of_lens_components = (int)lens_components.size();
-int num_of_intersections_1 = num_of_lens_components + 1;
-int num_of_intersections_2 = num_of_lens_components + 1;
-int num_of_intersections_3 = num_of_lens_components + 1;
-float total_lens_distance = 0.f;
-float max_ior = -1000.f;
-float min_ior = 1000.f;
+	//std::vector<PatentFormat> lens_components = angenieux;
+	//int aperture_id = angenieux_aperture_id;
+	//int num_of_ghosts = 92; // 14!/2*(14-2)!
+
+	int num_of_lens_components = (int)lens_components.size();
+	int num_of_intersections_1 = num_of_lens_components + 1;
+	int num_of_intersections_2 = num_of_lens_components + 1;
+	int num_of_intersections_3 = num_of_lens_components + 1;
+	float total_lens_distance = 0.f;
+	float max_ior = -1000.f;
+	float min_ior = 1000.f;
+} Lens;
 
 struct Application {
 	int patch_tesselation = 32;
@@ -275,36 +284,15 @@ struct Win {
 	D3D_DRIVER_TYPE       d3d_driver_type = D3D_DRIVER_TYPE_NULL;
 	D3D_FEATURE_LEVEL     d3d_feature_level = D3D_FEATURE_LEVEL_11_0;
 
-	// d3d defaults
-	INT   sample_mask = 0x0F;
-	UINT  offset = 0;
-	UINT  stride = sizeof(SimpleVertex);
-	float blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
-
-	inline XMFLOAT3 PointToD3d(vec3& point) {
-		float x = point.x;
-		float y = point.y / App.ratio * App.global_scale;
-		float z = point.z * App.global_scale;
-		return XMFLOAT3(-(z - 1.f), y, x);
-	}
-
-	inline float Sign(float v) {
-		return v < 0.f ? -1.f : 1.f;
-	}
-
-	inline float Lerp(float a, float b, float l) {
-		return a * (1.f - l) + b * l;
-	}
-
-	XMFLOAT4 Lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
-		float x = Lerp(a.x, b.x, l);
-		float y = Lerp(a.y, b.y, l);
-		float z = Lerp(a.z, b.z, l);
-		float w = Lerp(a.w, b.w, l);
-		return{ x, y, z, w };
-	}
-
+	// Convenient D3d Defaults Valuesf
+	INT                   sample_mask = 0x0F;
+	UINT                  offset = 0;
+	UINT                  stride = sizeof(SimpleVertex);
+	float                 blend_factor[4] = { 1.f, 1.f, 1.f, 1.f };
 } Win;
+
+// ---------------------------------------------------------------------------------------------------------
+// Ressources
 
 namespace Textures {
 	ID3D11UnorderedAccessView* null_ua_view[1] = { NULL };
@@ -388,7 +376,6 @@ namespace Textures {
 		sr_view_desc.Texture2D.MostDetailedMip = 0;
 		sr_view_desc.Texture2D.MipLevels = 1;
 		hr = Win.d3d_device->CreateShaderResourceView(texture, &sr_view_desc, &sr_view);
-
 	}
 
 	void CreateDepthBuffer(int width, int height, ID3D11Texture2D*& buffer, ID3D11DepthStencilView*& buffer_view) {
@@ -494,7 +481,7 @@ namespace Shaders {
 		Win.d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &Shaders::ps_basic);	
 		blob->Release();
 
-		std::string aperture_id_string = std::to_string(aperture_id);
+		std::string aperture_id_string = std::to_string(Lens.aperture_id);
 		std::string num_groups_string = std::to_string(App.num_groups);
 		std::string num_threads_string = std::to_string(App.num_threads);
 		std::string patch_tesselation_string = std::to_string(App.patch_tesselation);
@@ -577,7 +564,6 @@ namespace Shaders {
 }
 
 namespace Buffers {
-
 	D3D11_RESOURCE_MISC_FLAG DEFAULT_MISC_FLAG = D3D11_RESOURCE_MISC_FLAG(0);
 	D3D11_BIND_FLAG D3D11_BIND_SR_OR_UA_FLAG = D3D11_BIND_FLAG(D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS);
 
@@ -634,14 +620,14 @@ namespace Buffers {
 	void InitBuffers() {
 		CreateBuffer(&Buffers::globaldata, 1, sizeof(GlobalData), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&Buffers::instance_uniforms, 1, sizeof(InstanceUniforms), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
-		CreateBuffer(&Buffers::intersection_points1, num_of_intersections_1, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
-		CreateBuffer(&Buffers::intersection_points2, num_of_intersections_2, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
-		CreateBuffer(&Buffers::intersection_points3, num_of_intersections_3, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
-		CreateBuffer(&Buffers::ghostdata, num_of_ghosts, sizeof(GhostData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription.ghosts[0]);
-		CreateBuffer(&Buffers::lens_interface, (UINT)LensDescription.lens_interface.size(), sizeof(LensInterface), D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &LensDescription.lens_interface[0]);
+		CreateBuffer(&Buffers::intersection_points1, Lens.num_of_intersections_1, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::intersection_points2, Lens.num_of_intersections_2, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::intersection_points3, Lens.num_of_intersections_3, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&Buffers::ghostdata, Lens.num_of_ghosts, sizeof(GhostData), D3D11_BIND_UNORDERED_ACCESS, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &Lens.ghosts[0]);
+		CreateBuffer(&Buffers::lens_interface, (UINT)Lens.lens_interface.size(), sizeof(LensInterface), D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, &Lens.lens_interface[0]);
 
-		CreateUAView(Buffers::ghostdata, &Buffers::ghostdata_view, num_of_ghosts);
-		CreateUAView(Buffers::lens_interface, &Buffers::lensInterface_view, (UINT)LensDescription.lens_interface.size());
+		CreateUAView(Buffers::ghostdata, &Buffers::ghostdata_view, Lens.num_of_ghosts);
+		CreateUAView(Buffers::lens_interface, &Buffers::lensInterface_view, (UINT)Lens.lens_interface.size());
 	}
 }
 
@@ -767,53 +753,76 @@ namespace States {
 }
 
 void UpdateLensComponents() {
-	LensDescription.lens_interface[aperture_id].sa = UI.aperture_opening;
-	LensInterface aperture_component = LensDescription.lens_interface[aperture_id];
-	D3D11_BOX box = { aperture_id * sizeof(LensInterface), 0, 0, (aperture_id + 1) * sizeof(LensInterface), 1, 1 };
+	Lens.lens_interface[Lens.aperture_id].sa = UI.aperture_opening;
+	LensInterface aperture_component = Lens.lens_interface[Lens.aperture_id];
+	D3D11_BOX box = { Lens.aperture_id * sizeof(LensInterface), 0, 0, (Lens.aperture_id + 1) * sizeof(LensInterface), 1, 1 };
 	Win.d3d_context->UpdateSubresource(Buffers::lens_interface, 0, &box, &aperture_component, 0, 0);
 }
 
 void ParseLensComponents() {
 	// Parse the lens components into the LensInterface the ray_trace routine expects
-	LensDescription.lens_interface.resize(num_of_lens_components);
-	for (int i = num_of_lens_components - 1; i >= 0; --i) {
-		PatentFormat& entry = lens_components[i];
-		total_lens_distance += entry.d;
+	Lens.lens_interface.resize(Lens.num_of_lens_components);
+	for (int i = Lens.num_of_lens_components - 1; i >= 0; --i) {
+		PatentFormat& entry = Lens.lens_components[i];
+		Lens.total_lens_distance += entry.d;
 
-		float left_ior = i == 0 ? 1.f : lens_components[i - 1].n;
+		float left_ior = i == 0 ? 1.f : Lens.lens_components[i - 1].n;
 		float right_ior = entry.n;
 
 		if (right_ior != 1.f) {
-			min_ior = min(min_ior, right_ior);
-			max_ior = max(max_ior, right_ior);
+			Lens.min_ior = min(Lens.min_ior, right_ior);
+			Lens.max_ior = max(Lens.max_ior, right_ior);
 		}
 
-		vec3 center = { 0.f, 0.f, total_lens_distance - entry.r };
+		vec3 center = { 0.f, 0.f, Lens.total_lens_distance - entry.r };
 		vec3 n = { left_ior, 1.f, right_ior };
 
-		LensInterface component = { center, entry.r, n, entry.h, entry.c, (float)entry.f, total_lens_distance, entry.w };
-		LensDescription.lens_interface[i] = component;
+		LensInterface component = { center, entry.r, n, entry.h, entry.c, (float)entry.f, Lens.total_lens_distance, entry.w };
+		Lens.lens_interface[i] = component;
 	}
 
 	// Enumerate all possible ghosts of the lens system
 	int bounce1 = 2;
 	int bounce2 = 1;
 	int ghost_index = 0;
-	LensDescription.ghosts.resize(num_of_ghosts);
+	Lens.ghosts.resize(Lens.num_of_ghosts);
 	while (true) {
-		if (bounce1 >= (int)(LensDescription.lens_interface.size() - 1)) {
+		if (bounce1 >= (int)(Lens.lens_interface.size() - 1)) {
 			bounce2++;
 			bounce1 = bounce2 + 1;
 		}
 
-		if (bounce2 >= (int)(LensDescription.lens_interface.size() - 1)) {
+		if (bounce2 >= (int)(Lens.lens_interface.size() - 1)) {
 			break;
 		}
 
-		LensDescription.ghosts[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
+		Lens.ghosts[ghost_index] = XMFLOAT4((float)bounce1, (float)bounce2, 0, 0);
 		bounce1++;
 		ghost_index++;
 	}
+}
+
+inline XMFLOAT3 PointToD3d(vec3& point) {
+	float x = point.x;
+	float y = point.y / App.ratio * App.global_scale;
+	float z = point.z * App.global_scale;
+	return XMFLOAT3(-(z - 1.f), y, x);
+}
+
+inline float Sign(float v) {
+	return v < 0.f ? -1.f : 1.f;
+}
+
+inline float Lerp(float a, float b, float l) {
+	return a * (1.f - l) + b * l;
+}
+
+XMFLOAT4 Lerp(XMFLOAT4& a, XMFLOAT4& b, float l) {
+	float x = Lerp(a.x, b.x, l);
+	float y = Lerp(a.y, b.y, l);
+	float z = Lerp(a.z, b.z, l);
+	float w = Lerp(a.w, b.w, l);
+	return{ x, y, z, w };
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -821,11 +830,6 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow );
 HRESULT InitDevice();
 HRESULT InitResources();
 void Render();
-
-//--------------------------------------------------------------------------------------
-// Entry point to the program. Initializes everything and goes into a message processing 
-// loop. Idle App.time is used to render the scene.
-//--------------------------------------------------------------------------------------
 int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow ) {
 	UNREFERENCED_PARAMETER( hPrevInstance );
 	UNREFERENCED_PARAMETER( lpCmdLine );
@@ -868,13 +872,13 @@ int WINAPI wWinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 				UI.ghost_bounce_1 = std::max<int>(2, UI.ghost_bounce_1 - 1);
 
 			if (!UI.key_down && msg.wParam == 39)
-				UI.ghost_bounce_1 = std::min<int>((int)LensDescription.lens_interface.size() - 2, UI.ghost_bounce_1 + 1);
+				UI.ghost_bounce_1 = std::min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_1 + 1);
 
 			if (!UI.key_down && msg.wParam == 40)
 				UI.ghost_bounce_2 = std::max<int>(1, UI.ghost_bounce_2 - 1);
 
 			if (!UI.key_down && msg.wParam == 38) {
-				UI.ghost_bounce_2 = std::min<int>((int)LensDescription.lens_interface.size() - 2, UI.ghost_bounce_2 + 1);
+				UI.ghost_bounce_2 = std::min<int>((int)Lens.lens_interface.size() - 2, UI.ghost_bounce_2 + 1);
 				UI.ghost_bounce_2 = std::min<int>(UI.ghost_bounce_1 - 2, UI.ghost_bounce_2);
 			}
 		
@@ -1068,8 +1072,8 @@ Shapes::RayBundleData CreateRayBundleData(int subdiv, int num_patches) {
 			float ny = (float)y / (float)(subdiv - 1);
 			for (int x = 0; x < subdiv; ++x) {
 				float nx = (float)x / (float)(subdiv - 1);
-				float x_pos = Win.Lerp(l, r, nx);
-				float y_pos = Win.Lerp(t, b, ny);
+				float x_pos = Lerp(l, r, nx);
+				float y_pos = Lerp(t, b, ny);
 				vertices[n * subdiv * subdiv + y * subdiv + x] = { XMFLOAT3(x_pos, y_pos, 0.f) };
 			}
 		}
@@ -1108,7 +1112,7 @@ Shapes::RayBundleData CreateRayBundleData(int subdiv, int num_patches) {
 	int num_of_indices = (subdiv - 1) * (subdiv - 1) * num_patches * 6;
 	int num_of_vertices = (subdiv * subdiv) * num_patches;
 	void* vertex_data = malloc(sizeof(PSInput) * num_of_vertices);
-	CSIndirectData group_count_info = { (unsigned)num_of_ghosts * App.num_groups, (unsigned)App.num_groups, 3 };
+	CSIndirectData group_count_info = { (unsigned)Lens.num_of_ghosts * App.num_groups, (unsigned)App.num_groups, 3 };
 
 	Buffers::CreateBuffer(&bundle_data.indices, num_of_indices, sizeof(unsigned int), D3D11_BIND_INDEX_BUFFER, Buffers::DEFAULT_MISC_FLAG, &indices[0]);
 	Buffers::CreateBuffer(&bundle_data.cs_vertices, num_of_vertices, sizeof(PSInput), Buffers::D3D11_BIND_SR_OR_UA_FLAG, D3D11_RESOURCE_MISC_BUFFER_STRUCTURED, vertex_data);
@@ -1251,7 +1255,7 @@ HRESULT InitResources() {
 
 	Shapes::unit_circle = CreateUnitCircle();
 	Shapes::unit_square = CreateUnitSquare();
-	Shapes::ray_bundle_data = CreateRayBundleData(App.patch_tesselation, num_of_ghosts);
+	Shapes::ray_bundle_data = CreateRayBundleData(App.patch_tesselation, Lens.num_of_ghosts);
 
 	return S_OK;
 }
@@ -1355,13 +1359,13 @@ void DrawFlat(LensInterface& right) {
 }
 
 XMFLOAT4 LensColor(float ior, XMFLOAT4& c1, XMFLOAT4&c2) {
-	float normalized_ior = (ior - min_ior) / (max_ior - min_ior);
-	return Win.Lerp(c1, c2, normalized_ior);
+	float normalized_ior = (ior - Lens.min_ior) / (Lens.max_ior - Lens.min_ior);
+	return Lerp(c1, c2, normalized_ior);
 	//return normalized_ior < 0.5f ? c1 : c2;
 }
 
 XMFLOAT4 IntersectionColor(int i) {
-	float ior1 = LensDescription.lens_interface[i].n.x == 1.f ? LensDescription.lens_interface[i].n.z : LensDescription.lens_interface[i].n.x;
+	float ior1 = Lens.lens_interface[i].n.x == 1.f ? Lens.lens_interface[i].n.z : Lens.lens_interface[i].n.x;
 	return LensColor(ior1, ColorTheme.intersection2, ColorTheme.intersection3);
 }
 
@@ -1380,7 +1384,7 @@ void DrawLens(LensInterface& left, LensInterface& right, bool opaque) {
 	//  | | or | |
 	//  | |    | |
 	//  |/      \|
-	if (Win.Sign(left.radius) == Win.Sign(right.radius)) {
+	if (Sign(left.radius) == Sign(right.radius)) {
 		LensInterface _left = left;
 		LensInterface _right = right;
 		float eps = 0.001f;
@@ -1533,19 +1537,19 @@ void DrawLensInterface() {
 	Win.d3d_context->OMSetBlendState(States::bs_blend, Win.blend_factor, Win.sample_mask);
 
 	int i = 0;
-	while (i < (int)LensDescription.lens_interface.size()) {
+	while (i < (int)Lens.lens_interface.size()) {
 		bool opaque1 = (i == UI.ghost_bounce_1 - 1);
 		bool opaque2 = (i == UI.ghost_bounce_2 - 1);
-		if (LensDescription.lens_interface[i].flat) {
-			DrawFlat(LensDescription.lens_interface[i]);
+		if (Lens.lens_interface[i].flat) {
+			DrawFlat(Lens.lens_interface[i]);
 			i += 1;
-		} else if (LensDescription.lens_interface[i].n.x == 1.f) {
+		} else if (Lens.lens_interface[i].n.x == 1.f) {
 			opaque1 = opaque1 || (i == UI.ghost_bounce_1 - 2);
 			opaque2 = opaque2 || (i == UI.ghost_bounce_2 - 2);
-			DrawLens(LensDescription.lens_interface[i], LensDescription.lens_interface[i + 1], opaque1 || opaque2);
+			DrawLens(Lens.lens_interface[i], Lens.lens_interface[i + 1], opaque1 || opaque2);
 			i += 2;
 		} else {
-			DrawLens(LensDescription.lens_interface[i - 1], LensDescription.lens_interface[i], opaque1 || opaque2);
+			DrawLens(Lens.lens_interface[i - 1], Lens.lens_interface[i], opaque1 || opaque2);
 			i += 1;
 		}
 	}
@@ -1558,7 +1562,7 @@ void DrawIntersections(ID3D11DeviceContext* context, ID3D11Buffer* buffer, std::
 
 	std::vector<XMFLOAT3> points(max_points);
 	for (int i = 0; i < (int)intersections.size(); ++i) {
-		points[i] = (Win.PointToD3d(intersections[i]));
+		points[i] = (PointToD3d(intersections[i]));
 	}
 
 	void* ptr = &points.front();
@@ -1582,7 +1586,7 @@ void UpdateGlobals() {
 		vec3 dir = normalize(vec3(UI.draw2d ? 0 : -UI.x_dir, UI.y_dir, -1.f));
 
 		D3D11_BOX box = { 0, 0, 0, sizeof(GhostData), 1, 1 };
-		GhostData updated_ghostdata = { (float)ghost_bounce_1, (float)ghost_bounce_2, 0, 0 };
+		GhostData updated_ghostdata = { (float)UI.ghost_bounce_1, (float)UI.ghost_bounce_2, 0, 0 };
 		Win.d3d_context->UpdateSubresource(Buffers::ghostdata, 0, &box, &updated_ghostdata, 0, 0);
 	#endif
 
@@ -1591,10 +1595,10 @@ void UpdateGlobals() {
 	GlobalData updated_globaldata = {
 		App.time,
 		UI.rays_spread,
-		LensDescription.lens_interface[LensDescription.lens_interface.size() - 1].sa,
+		Lens.lens_interface[Lens.lens_interface.size() - 1].sa,
 
-		(float)aperture_id,
-		(float)LensDescription.lens_interface.size(),
+		(float)Lens.aperture_id,
+		(float)Lens.lens_interface.size(),
 		UI.coating_quality,
 
 		XMFLOAT2(App.backbuffer_width, App.backbuffer_height),
@@ -1707,7 +1711,7 @@ void Render() {
 
 		// Draw Ghosts
 		Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle_data.vertices_resource_view);
-		Win.d3d_context->DrawIndexedInstanced(App.num_vertices_per_bundle * 3 * 2, num_of_ghosts, 0, 0, 0);
+		Win.d3d_context->DrawIndexedInstanced(App.num_vertices_per_bundle * 3 * 2, Lens.num_of_ghosts, 0, 0, 0);
 		Win.d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
 
 		// Draw Starburst
@@ -1770,19 +1774,19 @@ void Render() {
 			Win.d3d_context->PSSetShaderResources(1, 1, &Textures::aperture_sr_view);
 			
 			// Dispatch
-			Win.d3d_context->Dispatch(num_groups, num_groups, 3);
+			Win.d3d_context->Dispatch(App.num_groups, App.num_groups, 3);
 			Win.d3d_context->CSSetUnorderedAccessViews(0, 1, Textures::null_ua_view, nullptr);
 			Win.d3d_context->CSSetUnorderedAccessViews(2, 1, Textures::null_ua_view, nullptr);
 
 			// Draw
 			Win.d3d_context->VSSetShaderResources(0, 1, &Shapes::ray_bundle_data.vertices_resource_view);
 			Win.d3d_context->RSSetState(States::rs_no_cull);
-			Win.d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+			Win.d3d_context->DrawIndexed(App.num_vertices_per_bundle * 3 * 2, 0, 0);
 
 			if (UI.overlay_wireframe) {
 				Win.d3d_context->RSSetState(States::rs_wireframe);
 				Win.d3d_context->PSSetShader(Shaders::ps_lens_flare_wireframe, nullptr, 0);
-				Win.d3d_context->DrawIndexed(num_vertices_per_bundle * 3 * 2, 0, 0);
+				Win.d3d_context->DrawIndexed(App.num_vertices_per_bundle * 3 * 2, 0, 0);
 			}
 
 			Win.d3d_context->VSSetShaderResources(0, 1, Textures::null_sr_view);
@@ -1802,35 +1806,35 @@ void Render() {
 			Win.d3d_context->PSSetConstantBuffers(0, 1, &Buffers::instance_uniforms);
 
 			// Trace all rays
-			std::vector<std::vector<vec3>> intersections1(num_of_rays);
-			std::vector<std::vector<vec3>> intersections2(num_of_rays);
-			std::vector<std::vector<vec3>> intersections3(num_of_rays);
+			std::vector<std::vector<vec3>> intersections1(App.num_of_rays);
+			std::vector<std::vector<vec3>> intersections2(App.num_of_rays);
+			std::vector<std::vector<vec3>> intersections3(App.num_of_rays);
 
 			vec3 dir(UI.direction.x, UI.direction.y, UI.direction.z);
-			for (int i = 0; i < num_of_rays; ++i) {
-				float pos = Win.Lerp(-1.f, 1.f, (float)i / (float)(num_of_rays - 1)) * rays_spread;
+			for (int i = 0; i < App.num_of_rays; ++i) {
+				float pos = Lerp(-1.f, 1.f, (float)i / (float)(App.num_of_rays - 1)) * UI.rays_spread;
 
 				vec3 a1 = vec3(0.0f, pos, 400.f);
 				vec3 d1 = vec3(0.0f, 0.0f, -1.f);
 				Ray r1 = { a1, d1 };
-				Intersection i1 = testSPHERE(r1, LensDescription.lens_interface[0]);
+				Intersection i1 = testSPHERE(r1, Lens.lens_interface[0]);
 				vec3 a2 = i1.pos - dir;
 				Ray r = { a2, dir };
 
-				Trace(r, 1.f, LensDescription.lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ ghost_bounce_1, ghost_bounce_2 });
+				Trace(r, 1.f, Lens.lens_interface, intersections1[i], intersections2[i], intersections3[i], int2{ UI.ghost_bounce_1, UI.ghost_bounce_2 });
 			}
 
 			// Draw all rays
-			XMFLOAT4 ghost_color1 = IntersectionColor(ghost_bounce_1 - 1);
-			XMFLOAT4 ghost_color2 = IntersectionColor(ghost_bounce_2 - 1);
-			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(Win.d3d_context, Buffers::intersection_points1, intersections1[i], num_of_intersections_1, ColorTheme.intersection1);
+			XMFLOAT4 ghost_color1 = IntersectionColor(UI.ghost_bounce_1 - 1);
+			XMFLOAT4 ghost_color2 = IntersectionColor(UI.ghost_bounce_2 - 1);
+			for (int i = 0; i < App.num_of_rays; ++i)
+				DrawIntersections(Win.d3d_context, Buffers::intersection_points1, intersections1[i], Lens.num_of_intersections_1, ColorTheme.intersection1);
 
-			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(Win.d3d_context, Buffers::intersection_points2, intersections2[i], num_of_intersections_2, ghost_color1);
+			for (int i = 0; i < App.num_of_rays; ++i)
+				DrawIntersections(Win.d3d_context, Buffers::intersection_points2, intersections2[i], Lens.num_of_intersections_2, ghost_color1);
 
-			for (int i = 0; i < num_of_rays; ++i)
-				DrawIntersections(Win.d3d_context, Buffers::intersection_points3, intersections3[i], num_of_intersections_3, ghost_color2);
+			for (int i = 0; i < App.num_of_rays; ++i)
+				DrawIntersections(Win.d3d_context, Buffers::intersection_points3, intersections3[i], Lens.num_of_intersections_3, ghost_color2);
 
 			// Draw lenses
 			DrawLensInterface();
