@@ -78,3 +78,16 @@ float3 TemperatureToColor(float t) {
 		return 0;
 	}
 }
+
+float2 Rotate(float2 p, float a) {
+	float x = p.x;
+	float y = p.y;
+
+	float cosa = cos(a);
+	float sina = sin(a);
+
+	float x1 = x * cosa - y * sina;
+	float y1 = y * cosa + x * sina;
+
+	return float2(x1, y1);
+}

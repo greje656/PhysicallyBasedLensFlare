@@ -93,17 +93,17 @@ struct ColorTheme {
 		return rgb;
 	};
 
-	float    alpha         = 0.65;
-	XMFLOAT4 fill1         = NormalizeRGB({ 64.f,  215.f, 242.f, 0.2f });
+	float    alpha         = 0.65f;
+	XMFLOAT4 fill1         = NormalizeRGB({  64.f, 215.f, 242.f, 0.2f });
 	XMFLOAT4 fill2         = NormalizeRGB({ 179.f, 178.f, 210.f, 0.2f });
 	XMFLOAT4 flat_fill     = NormalizeRGB({ 190.f, 190.f, 190.f, 1.0f });
 	XMFLOAT4 stroke        = NormalizeRGB({ 115.f, 115.f, 115.f, 1.0f });
 	XMFLOAT4 stroke1       = NormalizeRGB({ 115.f, 115.f, 115.f, 1.0f });
 	XMFLOAT4 stroke2       = NormalizeRGB({ 165.f, 165.f, 165.f, 1.0f });
 	XMFLOAT4 background1   = NormalizeRGB({ 240.f, 240.f, 240.f, 1.0f });
-	XMFLOAT4 background2   = NormalizeRGB({ 0.f,   0.f,   0.f,   1.0f });
-	XMFLOAT4 intersection1 = NormalizeRGB({ 0.f,   0.f,   0.f,   0.1f });
-	XMFLOAT4 intersection2 = NormalizeRGB({ 64.f,  215.f, 242.f, 0.5f });
+	XMFLOAT4 background2   = NormalizeRGB({   0.f,   0.f,   0.f, 1.0f });
+	XMFLOAT4 intersection1 = NormalizeRGB({   0.f,   0.f,   0.f, 0.1f });
+	XMFLOAT4 intersection2 = NormalizeRGB({  64.f, 215.f, 242.f, 0.5f });
 	XMFLOAT4 intersection3 = NormalizeRGB({ 179.f, 178.f, 210.f, 0.5f });
 } ColorTheme;
 
@@ -1453,7 +1453,7 @@ void Render() {
 
 			Win.d3d_context->OMSetRenderTargets(1, &Textures.backbuffer_rt_view, Textures.depthstencil_view);
 			Win.d3d_context->OMSetDepthStencilState(States.dss_default, 0);
-			Win.d3d_context->OMSetBlendState(States.bs_blend, Win.blend_factor, Win.sample_mask);
+			Win.d3d_context->OMSetBlendState(States.bs_add, Win.blend_factor, Win.sample_mask);
 			Win.d3d_context->ClearRenderTargetView(Textures.backbuffer_rt_view, XMVECTORF32{ ColorTheme.background2.x, ColorTheme.background2.y, ColorTheme.background2.z, ColorTheme.background2.w });
 			Win.d3d_context->ClearDepthStencilView(Textures.depthstencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -1543,7 +1543,7 @@ void Render() {
 	// Visualize the aperture texture:
 	//Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);
 	//Win.d3d_context->PSSetShaderResources(1, 1, &Textures.aperture_sr_view);
-	//DrawFullscreenQuad(Win.d3d_context, unit_square, ColorTheme.fill1, Textures.backbuffer_rt_view, Textures.depthstencil_view);
+	//DrawFullscreenQuad(Win.d3d_context, Shapes.unit_square, ColorTheme.fill1, Textures.backbuffer_rt_view, Textures.depthstencil_view);
 
 	// Visualize the starburst texture:
 	// Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);

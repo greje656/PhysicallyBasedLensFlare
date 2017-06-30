@@ -49,19 +49,6 @@ float3 IntersectPlane(float3 n, float3 p0, float3 l0, float3 l) {
     return 0; 
 } 
 
-float2 Rotate(float2 p, float a) {
-	float x = p.x;
-	float y = p.y;
-
-	float cosa = cos(a);
-	float sina = sin(a);
-
-	float x1 = x * cosa - y * sina;
-	float y1 = y * cosa + x * sina;
-
-	return float2(x1, y1);
-}
-
 bool Clamped(float2 ndc) {
 	return ndc.x < -0.5 || ndc.x > 0.5 || ndc.y < -0.5 || ndc.y > 0.5;
 }

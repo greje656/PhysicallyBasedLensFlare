@@ -262,7 +262,8 @@ float GetArea(int2 pos, int offset) {
 
 PSInput GetTraceResult(float2 ndc, float wavelength, int2 bounces){
 	float3 starting_pos = float3(ndc * spread, 1000.f);
-	
+	starting_pos.xy = Rotate(starting_pos.xy, 2.f);
+
 	// Project all starting points in the entry lens
 	Ray c = { starting_pos, float3(0, 0, -1.f), float4(0,0,0,0) };
 	Intersection i = TestSphere(c, lens_interface[0]);
