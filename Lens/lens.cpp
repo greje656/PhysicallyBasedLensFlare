@@ -752,6 +752,51 @@ struct States {
 	}
 } States;
 
+struct GPUQueries {
+
+	ID3D11Query* disjoint;
+	ID3D11Query* frame_start;
+	ID3D11Query* frame_end;
+	ID3D11Query* aperture_done;
+	ID3D11Query* starburst_done;
+	ID3D11Query* lensflare_compute_done;
+	ID3D11Query* lensflare_draw_done;
+
+	void InitQueries() {
+		D3D11_QUERY_DESC time_stamp = { D3D11_QUERY_TIMESTAMP, 0 };
+		D3D11_QUERY_DESC time_stamp_disjoint = { D3D11_QUERY_TIMESTAMP_DISJOINT, 0 };
+
+		Win.d3d_device->CreateQuery(&time_stamp_disjoint, &disjoint);
+		Win.d3d_device->CreateQuery(&time_stamp, &frame_start);
+		Win.d3d_device->CreateQuery(&time_stamp, &frame_end);
+		Win.d3d_device->CreateQuery(&time_stamp, &aperture_done);
+		Win.d3d_device->CreateQuery(&time_stamp, &starburst_done);
+		Win.d3d_device->CreateQuery(&time_stamp, &lensflare_compute_done);
+		Win.d3d_device->CreateQuery(&time_stamp, &lensflare_draw_done);
+	}
+
+	static void PrintGPUTimes(GPUQueries& queries) {
+		while (Win.d3d_context->GetData(queries.disjoint, NULL, 0, 0) == S_FALSE) {
+			Sleep(1);
+		}
+
+		D3D10_QUERY_DATA_TIMESTAMP_DISJOINT disjoint_data;
+		Win.d3d_context->GetData(queries.disjoint, &disjoint_data, sizeof(disjoint_data), 0);
+
+		UINT64 start, done, aperture, starburst, compute, draw = 0;
+		Win.d3d_context->GetData(queries.frame_start, &start, sizeof(UINT64), 0);
+		Win.d3d_context->GetData(queries.frame_end, &done, sizeof(UINT64), 0);
+		Win.d3d_context->GetData(queries.aperture_done, &aperture, sizeof(UINT64), 0);
+		Win.d3d_context->GetData(queries.starburst_done, &starburst, sizeof(UINT64), 0);
+		Win.d3d_context->GetData(queries.lensflare_compute_done, &compute, sizeof(UINT64), 0);
+		Win.d3d_context->GetData(queries.lensflare_draw_done, &draw, sizeof(UINT64), 0);
+
+		// float ms_time = float(done - start) / float(disjoint_data.Frequency) * 1000.0f;
+
+	}
+
+} GPUQueries;
+
 struct Shapes {
 	struct Square {
 		ID3D11Buffer* indices;
@@ -1366,14 +1411,22 @@ void DrawStarBurst() {
 // Render
 // ---------------------------------------------------------------------------------------------------------
 void Render() {
+	Win.d3d_context->Begin(GPUQueries.disjoint);
+
+	Win.d3d_context->End(GPUQueries.frame_start);
+
 	UpdateGlobals();
 
+	DrawAperture();
 	if (UI.aperture_needs_updating) {
 		DrawAperture();
+		Win.d3d_context->End(GPUQueries.aperture_done);
+
 		DrawStarBurst();
+		Win.d3d_context->End(GPUQueries.starburst_done);
+
 		UI.aperture_needs_updating = false;
 	}
-
 	#if defined(DRAWLENSFLARE)
 		// Setup pipeline
 		Win.d3d_context->IASetInputLayout(Win.d3d_vertex_layout_3d);
@@ -1407,11 +1460,13 @@ void Render() {
 		Win.d3d_context->DispatchIndirect(Shapes.ray_bundle.cs_group_count_info, 0);
 		Win.d3d_context->CSSetUnorderedAccessViews(0, 1, Textures.null_ua_view, nullptr);
 		Win.d3d_context->CSSetUnorderedAccessViews(2, 1, Textures.null_ua_view, nullptr);
-
+		Win.d3d_context->End(GPUQueries.lensflare_compute_done);
+		
 		// Draw Ghosts
 		Win.d3d_context->VSSetShaderResources(0, 1, &Shapes.ray_bundle.vertices_resource_view);
 		Win.d3d_context->DrawIndexedInstanced(App.num_vertices_per_bundle * 3 * 2, Lens.num_of_ghosts, 0, 0, 0);
 		Win.d3d_context->VSSetShaderResources(0, 1, Textures.null_sr_view);
+		Win.d3d_context->End(GPUQueries.lensflare_draw_done);
 
 		// Draw Starburst
 		Win.d3d_context->VSSetShader(Shaders.vs_starburst, nullptr, 0);
@@ -1554,7 +1609,10 @@ void Render() {
 	// Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);
 	// Win.d3d_context->PSSetShaderResources(1, 1, &Textures.dust_sr_view);
 
+	Win.d3d_context->End(GPUQueries.frame_end);
 	Win.d3d_swapchain->Present(0, 0);
+	Win.d3d_context->End(GPUQueries.disjoint);
+	GPUQueries::PrintGPUTimes(GPUQueries);
 }
 
 
@@ -1579,6 +1637,7 @@ HRESULT InitResources() {
 	Buffers.InitBuffers();
 	States.InitStates();
 	Shapes.InitShapes();
+	GPUQueries.InitQueries();
 	FFT.InitFFTTetxtures(Win.d3d_device, (int)App.aperture_resolution);
 
 	return S_OK;
