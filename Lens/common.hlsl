@@ -32,6 +32,10 @@ cbuffer GlobalData : register(b1) {
 	float padding;
 };
 
+cbuffer PerformanceData : register(b2) {
+	float4 performance_data;
+}
+
 static float4 temperature_color_map[25] = {
 	float4(    0.0, 0.000, 0.000, 0.000),
 	float4( 1000.0, 1.000, 0.007, 0.000),

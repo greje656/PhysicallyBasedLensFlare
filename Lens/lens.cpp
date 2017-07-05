@@ -61,6 +61,7 @@ struct CSIndirectData {
 
 typedef XMFLOAT3 SimpleVertex;
 typedef XMFLOAT4 GhostData;
+typedef XMFLOAT4 PerformanceData;
 
 // ---------------------------------------------------------------------------------------------------------
 // Inlined Functions
@@ -429,6 +430,7 @@ struct Shaders {
 	ID3D11VertexShader*  vs_basic = nullptr;
 	ID3D11PixelShader*   ps_basic = nullptr;
 	ID3D11PixelShader*   ps_tonemapper = nullptr;
+	ID3D11PixelShader*   ps_tonemapper_debug = nullptr;
 
 	ID3D11VertexShader*  vs_starburst = nullptr;
 	ID3D11PixelShader*   ps_starburst = nullptr;
@@ -512,6 +514,11 @@ struct Shaders {
 		Win.d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &ps_tonemapper);
 		blob->Release();
 
+		D3D_SHADER_MACRO tonemapping_debug_flags[] = { "DISPLAY_PERF_DATA", "", 0, 0 };
+		CompileShaderFromFile(L"post.hlsl", "PSToneMapping", "ps_5_0", &blob, tonemapping_debug_flags);
+		Win.d3d_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &ps_tonemapper_debug);
+		blob->Release();
+
 		CompileShaderFromFile(L"starburst.hlsl", "VSStarburst", "vs_5_0", &blob);
 		Win.d3d_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &vs_starburst);
 		blob->Release();
@@ -563,6 +570,7 @@ struct Buffers {
 
 	ID3D11Buffer* ghostdata = nullptr;
 	ID3D11Buffer* globaldata = nullptr;
+	ID3D11Buffer* performance_data = nullptr;
 	ID3D11Buffer* instance_uniforms = nullptr;
 	ID3D11Buffer* intersection_points1 = nullptr;
 	ID3D11Buffer* intersection_points2 = nullptr;
@@ -613,6 +621,7 @@ struct Buffers {
 
 	void InitBuffers() {
 		CreateBuffer(&globaldata, 1, sizeof(GlobalData), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
+		CreateBuffer(&performance_data, 1, sizeof(PerformanceData), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&instance_uniforms, 1, sizeof(InstanceUniforms), D3D11_BIND_CONSTANT_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&intersection_points1, Lens.num_of_intersections_1, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
 		CreateBuffer(&intersection_points2, Lens.num_of_intersections_2, sizeof(SimpleVertex), D3D11_BIND_VERTEX_BUFFER, DEFAULT_MISC_FLAG, 0);
@@ -803,7 +812,15 @@ struct GPUQueries {
 		Win.d3d_context->GetData(queries.lensflare_draw_start, &draw_start, sizeof(UINT64), 0);
 		Win.d3d_context->GetData(queries.lensflare_draw_end, &draw_end, sizeof(UINT64), 0);
 
-		// float ms_time = float(done - start) / float(disjoint_data.Frequency) * 1000.0f;
+		float denum = float(disjoint_data.Frequency) / 1000.f;
+		float ms_frame = float(frame_end - frame_start) / denum;
+		float ms_compute = float(compute_end - compute_start) / denum;
+		float ms_draw = float(draw_end - draw_start) / denum;
+		float ms_aperture = float(aperture_end - aperture_start) / denum;
+		float ms_startburst = float(starburst_end - starburst_start) / denum;
+
+		PerformanceData updated_performance_data = { ms_frame, ms_compute, ms_draw, ms_aperture + ms_startburst };
+		Win.d3d_context->UpdateSubresource(Buffers.performance_data, 0, nullptr, &updated_performance_data, 0, 0);
 
 	}
 
@@ -1510,8 +1527,9 @@ void Render() {
 		Win.d3d_context->ClearRenderTargetView(Textures.backbuffer_rt_view, XMVECTORF32{ 0,0,0,0});
 
 		Win.d3d_context->VSSetShader(Shaders.vs_basic, nullptr, 0);
-		Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);
+		UI.overlay_wireframe ? Win.d3d_context->PSSetShader(Shaders.ps_tonemapper_debug, nullptr, 0) : Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);
 		Win.d3d_context->PSSetConstantBuffers(0, 1, &Buffers.instance_uniforms);
+		Win.d3d_context->PSSetConstantBuffers(2, 1, &Buffers.performance_data);
 		Win.d3d_context->VSSetConstantBuffers(0, 1, &Buffers.instance_uniforms);
 		Win.d3d_context->PSSetShaderResources(1, 1, &Textures.hdr_sr_view);
 
@@ -1628,9 +1646,9 @@ void Render() {
 	// Win.d3d_context->PSSetShader(Shaders.ps_tonemapper, nullptr, 0);
 	// Win.d3d_context->PSSetShaderResources(1, 1, &Textures.dust_sr_view);
 
-	Win.d3d_context->End(GPUQueries.frame_end);
 	Win.d3d_swapchain->Present(0, 0);
 
+	Win.d3d_context->End(GPUQueries.frame_end);
 	Win.d3d_context->End(GPUQueries.disjoint);
 	GPUQueries::PrintGPUTimes(GPUQueries);
 }
