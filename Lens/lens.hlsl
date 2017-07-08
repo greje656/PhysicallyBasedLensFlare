@@ -213,6 +213,7 @@ float GetArea(int2 pos, int offset) {
 	int h = PosToOffsetClamped(pos + int2( 0,-1));
 	int i = PosToOffsetClamped(pos + int2( 1,-1));
 
+	// Should use groupshared to access neighbors
 	float4 pa = uav_buffer[a + offset].pos;
 	float4 pb = uav_buffer[b + offset].pos;
 	float4 pc = uav_buffer[c + offset].pos;
