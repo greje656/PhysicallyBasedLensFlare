@@ -1,7 +1,7 @@
 # PhysicallyBasedLensFlare
 Lens flare
 - [x] Basic implementation
-- [ ] Chromatic aberation
+- [ ] Chromatic aberration
 - [x] Starbusrt
 - [ ] Optimizations
 
